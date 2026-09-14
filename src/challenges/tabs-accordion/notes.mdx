@@ -1,0 +1,45 @@
+### The problem
+
+Build tabs and an accordion. Visually trivial — a handful of divs and some
+`onClick` toggles — but a common interview follow-up is "now make it
+keyboard accessible," which is where most quick implementations fall apart.
+
+### The approach
+
+**Tabs** follow the [WAI-ARIA Tabs pattern](https://www.w3.org/WAI/ARIA/apg/patterns/tabs/):
+
+- The tab list is `role="tablist"`, each tab is `role="tab"` with
+  `aria-selected` and `aria-controls` pointing at its panel, and each panel is
+  `role="tabpanel"` with `aria-labelledby` pointing back at its tab.
+- Only the active tab is in the natural Tab order (`tabIndex={0}` on it,
+  `tabIndex={-1}` on the rest) — pressing Tab should jump *past* the whole
+  tablist in one stop, not through every individual tab.
+- **Arrow Left/Right** move both focus and selection between tabs; **Home/End**
+  jump to the first/last tab. This is the behavior sighted mouse users get for
+  free by clicking, and keyboard users need an equivalent for.
+
+**Accordion** items use a `<button>` (not a `<div>`, so it's natively
+focusable and clickable with Enter/Space) with `aria-expanded` and
+`aria-controls`, and the panel is hidden with the `hidden` attribute — which
+removes it from the accessibility tree entirely, not just visually via CSS.
+
+### Trade-offs
+
+- **Single-open vs. multi-open accordion**: this one allows only one section
+  open at a time (`openId` is a single value, not a Set). Multi-open is
+  arguably better UX for reference content users may want to compare
+  side-by-side; single-open is simpler and reads as "the current one you're
+  looking at."
+- **Hand-rolled ARIA** vs. a headless UI library (Radix, React Aria, Headless
+  UI): those libraries encode these exact patterns (and many edge cases
+  around focus management, RTL, etc.) so most production code should prefer
+  them. Building it by hand here is about demonstrating you understand what
+  those libraries are actually doing under the hood.
+
+### What interviewers probe for
+
+- Do arrow keys work at all, or only mouse clicks?
+- Is only the active tab reachable via sequential Tab, or does Tab step
+  through every single tab individually?
+- Does the accordion use a real `<button>`, and is `aria-expanded` kept in
+  sync with the actual open/closed state?

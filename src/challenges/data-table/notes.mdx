@@ -1,0 +1,42 @@
+### The problem
+
+Render a table of data that can be filtered by a text query and sorted by
+clicking column headers — a staple "build a mini admin panel" exercise.
+
+### The approach
+
+Filtering and sorting are both derived from the raw dataset plus small pieces
+of UI state (`filter`, `sortKey`, `sortDir`), wrapped in a single `useMemo`.
+Nothing is stored as "the filtered/sorted list" in its own `useState` — it's
+always recomputed from the source of truth, which avoids the two states ever
+getting out of sync.
+
+### Why `useMemo` here
+
+For 8 rows, this makes no measurable performance difference. It's included
+because interviewers want to see that you *know* filtering/sorting is
+O(n) / O(n log n) work that would otherwise re-run on every render — including
+renders triggered by something unrelated elsewhere in the component tree —
+and that you know the tool (`useMemo`) that avoids that.
+
+### Trade-offs
+
+- **Client-side sorting/filtering** (used here) only works while the whole
+  dataset is already loaded in the browser. Once a dataset is large (thousands
+  of rows), sorting/filtering should move server-side, with the table sending
+  the current sort/filter state as query params — see the Pagination example
+  for that client vs. server trade-off in more depth.
+- **Deriving state vs. storing it**: it's tempting to `useEffect` the filtered
+  list into its own state variable, but that adds a render cycle of lag and a
+  second source of truth that can drift. Deriving it directly (optionally
+  memoized) is simpler and always correct.
+- **Mutating vs. copying before sort**: `Array.prototype.sort` mutates in
+  place. Sorting a copy (`[...filtered].sort(...)`) avoids silently mutating
+  the original `EMPLOYEES` array, which would cause subtle bugs elsewhere.
+
+### What interviewers probe for
+
+- Do you sort a copy, not the original array?
+- Can you explain when `useMemo` actually matters (large lists, expensive
+  computations) vs. when it's premature optimization?
+- Do you handle the "no results after filtering" empty state?

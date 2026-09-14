@@ -1,0 +1,48 @@
+### The problem
+
+Build a cart where quantities can change, a bulk discount applies per
+product, and shipping depends on the order total — a common "state
+management with business rules" exercise.
+
+### The approach
+
+The cart state is kept as small and "dumb" as possible: `{ [productId]:
+quantity }`. Nothing else — not subtotal, not discount, not total — is
+stored in state. All of it is **derived** inside one `useMemo`, in a single
+pass over the cart entries.
+
+This matters because a cart bug you see constantly in real take-homes is
+storing the total as its own `useState` and updating it in multiple places
+(`addItem`, `removeItem`, `applyDiscount`...) — it's easy for those updates
+to drift out of sync. Deriving everything from one source of truth makes
+that class of bug impossible.
+
+### The business rules, made explicit
+
+- **Bulk discount**: 10% off a line when that line's quantity reaches 3,
+  computed per-product-line (not cart-wide).
+- **Free shipping**: applies when the post-discount total is $400+;
+  otherwise a flat $15 shipping fee.
+
+These are the kind of rules a real spec often leaves ambiguous (pre- or
+post-discount threshold? per-line or per-cart discount stacking?) — flagging
+the ambiguity out loud is itself a signal interviewers look for.
+
+### Trade-offs
+
+- **Recomputing everything on every change** vs. incremental updates:
+  recomputing (as done here) is simpler and impossible to get out of sync;
+  for a cart with thousands of line items you might reach for more granular
+  memoization, but that's premature for a cart with a handful of products.
+- **`Record<string, number>`** vs. an array of `{productId, qty}` objects:
+  the record makes "does this product exist in the cart" and "increment this
+  product's quantity" O(1) lookups/updates, at the cost of needing
+  `Object.entries` to iterate for display.
+
+### What interviewers probe for
+
+- Is there ever a path where the displayed total can be wrong or stale?
+- Do quantity controls handle the qty-reaches-0 case (removing the line
+  entirely, not leaving a "0" row)?
+- Can you clearly explain the business rules in your own words, including
+  their edge cases?

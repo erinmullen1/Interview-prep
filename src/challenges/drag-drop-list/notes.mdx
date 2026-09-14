@@ -1,0 +1,48 @@
+### The problem
+
+Let a user reorder a list of items by dragging them, using the browser's
+native HTML5 Drag and Drop API rather than a library like `dnd-kit` or
+`react-beautiful-dnd`.
+
+### The approach
+
+Each list item is `draggable`, with three handlers doing the real work:
+
+- **`onDragStart`** records which item is being dragged.
+- **`onDragOver`** must call `event.preventDefault()` — browsers refuse to
+  allow a drop on most elements by default, and this is the (non-obvious)
+  line that opts an element in as a valid drop target.
+- **`onDrop`** does the actual reorder: splice the dragged item out of the
+  array and splice it back in at the target's index.
+
+A hidden `aria-live="polite"` region announces the result of every reorder
+("Task X moved to position 2 of 4") — necessary because a purely visual
+re-ordering communicates nothing to a screen reader user.
+
+### Why keyboard buttons are included, not optional
+
+Native HTML5 drag-and-drop has **no built-in keyboard equivalent** — a mouse
+or touchscreen is required to trigger it at all. A drag-and-drop reorder
+feature that only works by dragging is inaccessible to keyboard-only and
+many screen-reader users by construction, not by an oversight that CSS or
+ARIA attributes could patch over. The ↑/↓ buttons on each row are the actual
+fix: a fully keyboard-operable way to reach the same outcome.
+
+### Trade-offs
+
+- **Native HTML5 DnD** (used here) needs no dependency, but its API is
+  famously awkward (the `dataTransfer` object, inconsistent drag-image
+  behavior across browsers, no built-in touch support). **Pointer-event-based
+  libraries** (`dnd-kit`, `@atlaskit/pragmatic-drag-and-drop`) reimplement
+  dragging from pointer events instead, which gives far better touch support,
+  animation, and accessibility hooks — most production apps should prefer
+  one of these over hand-rolled native DnD.
+- **Splice-based reorder** is O(n) per drop; fine for lists of realistic
+  size, and simpler to reason about than an index-math-based in-place swap.
+
+### What interviewers probe for
+
+- Do you remember `preventDefault()` in `dragover` at all (a very common
+  stumbling block)?
+- Is there any non-mouse way to reorder the list?
+- Is the reorder result announced to assistive technology, or purely visual?

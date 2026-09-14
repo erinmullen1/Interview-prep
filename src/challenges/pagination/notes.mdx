@@ -1,0 +1,47 @@
+### The problem
+
+Show a large dataset a page at a time with numbered page controls — one of
+the most common "build a mini admin list" requests, and a good vehicle for
+talking about where pagination logic should actually live.
+
+### The approach
+
+This demo deliberately simulates a **real server-paginated API**: the "server"
+function only ever returns one page of items plus a `total` count, never the
+whole 43-item dataset. The component requests a page whenever `page` changes,
+and shows skeleton rows while waiting.
+
+A `cancelled` flag inside the effect's cleanup guards against the classic
+pagination race: if a user clicks Page 3 then immediately clicks Page 1, the
+slower Page 3 response must not be allowed to land after Page 1's and
+overwrite it with the wrong page's data.
+
+### Client-side vs. server-side pagination — the actual trade-off
+
+- **Client-side** (fetch everything once, slice it into pages in the
+  browser): simpler to implement, and switching pages is instant since no
+  network round-trip is needed. Only works while the *entire* dataset is
+  small enough to reasonably download and hold in memory — hundreds of rows,
+  not millions.
+- **Server-side** (used here): required once a dataset is too large to ship
+  to the client at all. Costs a network round-trip per page (visible as a
+  loading state) and requires the server to support sorting/filtering
+  *before* paginating, since the client only ever sees a slice.
+
+A live interview will often ask you to justify which one you'd pick for a
+given dataset size — the right answer is "it depends on the data volume,"
+not a fixed preference.
+
+### Trade-offs within the server-side approach
+
+- **Numbered page buttons** (used here) are familiar and let users jump
+  around, but don't scale well past a couple dozen pages without truncation
+  (e.g. `1 2 3 … 8 9`). **Cursor-based** pagination (`next`/`prev` tokens
+  instead of page numbers) scales better for huge or frequently-changing
+  datasets but loses "jump to page 7" capability.
+
+### What interviewers probe for
+
+- Do you guard against the out-of-order response race condition?
+- Do you show a loading state per page, not just once on initial mount?
+- Can you explain when you'd pick client- vs. server-side pagination, and why?

@@ -1,0 +1,41 @@
+### The problem
+
+An interviewer asks you to build a search box that filters or fetches results
+as the user types. The naive version calls the API on every single keystroke,
+which is wasteful and can produce results that arrive out of order.
+
+### The approach
+
+This demo uses **two separate `useEffect`s**, one for each concern:
+
+1. A **debounce** effect delays committing the typed value for 300ms after
+   the user stops typing.
+2. A **fetch** effect runs only when that debounced value changes, and uses
+   `AbortController` to cancel any request that's still in flight when a
+   newer one starts.
+
+### Why split into two effects?
+
+Mixing debouncing and fetching into one effect works, but couples two
+different timing concerns (typing speed vs. network speed) into one block of
+logic, making it harder to reason about and test independently.
+
+### Trade-offs
+
+- **300ms delay** is a compromise: shorter feels more "instant" but sends more
+  requests; longer saves requests but starts to feel laggy. 200-400ms is a
+  common sweet spot.
+- **Debouncing vs. throttling**: debouncing (used here) waits for a pause;
+  throttling would fire at a fixed rate regardless of pauses. Debouncing suits
+  search because there's no benefit to partial results mid-word.
+- **Client-side library** (like `use-debounce` or `lodash.debounce`) vs.
+  hand-rolled: hand-rolling avoids a dependency, but a shared `useDebouncedValue`
+  hook would be worth extracting if this pattern repeats across an app.
+
+### What interviewers probe for
+
+- Do you handle the **race condition** where an older request resolves after
+  a newer one? (This is the single most common thing candidates miss.)
+- Do you clean up timers/requests on unmount to avoid `setState` on an
+  unmounted component?
+- Do you show a loading state, and handle the empty/no-results state?

@@ -1,0 +1,38 @@
+### The problem
+
+Load a long list in pages, fetching the next page automatically as the user
+scrolls near the bottom, instead of a "Page 1 2 3" pagination UI or a manual
+"Load More" button.
+
+### The approach
+
+A tiny invisible **sentinel** `<div>` sits at the bottom of the rendered list.
+An `IntersectionObserver` watches that sentinel; when it scrolls into the
+viewport (or within `rootMargin` of it), the next page is requested.
+
+### Why this over alternatives
+
+- **Scroll event + manual math** (`scrollTop + clientHeight >= scrollHeight`)
+  works but requires throttling the handler yourself and is easy to get
+  slightly wrong (off-by-a-few-pixels bugs).
+- **A "Load More" button** is simpler and more accessible by default (a real
+  action for keyboard/screen-reader users to trigger), but wasn't what was
+  asked for here. In production, many teams combine both: infinite scroll
+  visually, with a manual button as an accessible fallback/escape hatch.
+
+### Trade-offs
+
+- Infinite scroll can trap keyboard and screen-reader users in an
+  ever-growing page with no way to reach the footer — a real accessibility
+  concern worth raising in an interview even if you implement the scroll
+  version.
+- It also makes items harder to link/bookmark by position, and can hurt
+  perceived performance if pages are large. This demo caps at 120 items.
+
+### What interviewers probe for
+
+- Do you guard against firing multiple simultaneous requests (the `loading`
+  check before calling `loadNext`)?
+- Do you clean up the observer on unmount / when there's no more data?
+- Can you explain **why** you chose `IntersectionObserver` over scroll
+  listeners, including its performance characteristics?

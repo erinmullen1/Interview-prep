@@ -1,0 +1,42 @@
+### The problem
+
+Build a signup form with several kinds of validation: simple length checks,
+a format check (email), and an **async** check that requires hitting a
+server ("is this username taken?").
+
+### The approach
+
+- Each field tracks whether it has been **touched** (blurred at least once).
+  Errors only render for touched fields, so the user isn't shown a wall of
+  red before they've typed anything.
+- Sync validations (length, regex) run on every render, derived from state —
+  no separate validation library needed for a form this small.
+- The async username check reuses the **debounce + AbortController** pattern
+  from the search example: wait 400ms after typing stops, then check, and
+  cancel any check that's superseded by a newer keystroke.
+- Submission is blocked (`preventDefault` + `isValid` check) and marks every
+  field touched, so a user who clicks Submit without visiting a field still
+  sees all relevant errors at once.
+
+### Trade-offs
+
+- **Hand-rolled vs. a form library** (React Hook Form, Formik, Zod +
+  resolver): hand-rolling is fine and transparent for 3 fields; a real app
+  with 10+ fields, nested objects, or shared validation schemas benefits from
+  a library and a schema (e.g. Zod) as the single source of truth for both
+  client validation and (ideally) server validation.
+- **Validate-on-blur vs. validate-on-change**: this demo validates on blur
+  first, then live-updates after that, which is the pattern most users find
+  least annoying. Pure on-change validation feels naggy; pure on-submit
+  validation feels like it hides problems until the end.
+- **Loose email regex**: intentionally simple. Perfect RFC-5322 validation is
+  a well-known rabbit hole; the real check is a confirmation email.
+
+### What interviewers probe for
+
+- Do you debounce/cancel the async check, or does it fire (and potentially
+  resolve out of order) on every keystroke?
+- Do you use `aria-invalid` / `aria-describedby` / `role="alert"` so errors
+  are announced to assistive technology, not just shown visually?
+- Do you disable submit or re-validate on submit, so a user can't bypass
+  validation by clicking Submit fast enough?

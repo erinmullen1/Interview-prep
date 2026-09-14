@@ -1,0 +1,44 @@
+### The problem
+
+Build a modal dialog. Visually this is easy (a fixed-position overlay); doing
+it in a way that's genuinely usable by keyboard and screen-reader users is
+where most take-home submissions fall short.
+
+### The approach
+
+Four pieces make this dialog accessible, not just visually a modal:
+
+1. **`role="dialog"` + `aria-modal="true"` + `aria-labelledby`** so assistive
+   technology announces it correctly and knows the page behind it is
+   (semantically) inert while it's open.
+2. **Initial focus moves into the dialog** when it opens, so keyboard users
+   don't have to Tab from wherever they were on the page all the way to it.
+3. **A focus trap**: Tab and Shift+Tab cycle only through elements inside the
+   dialog, wrapping from last back to first (and vice versa), instead of
+   leaking focus to content behind the overlay.
+4. **Focus is restored to the trigger button on close**, so the user's
+   keyboard position returns to where they were before opening it.
+
+Escape closes it; clicking the backdrop closes it; clicking inside the
+dialog does not (via `stopPropagation`).
+
+### Trade-offs
+
+- **Hand-rolled focus trap** (used here, ~15 lines) vs. a library
+  (`focus-trap-react`, or the native `<dialog>` element with
+  `showModal()`, which handles a lot of this natively in modern browsers).
+  Hand-rolling is worth demonstrating you understand the mechanism, but a
+  real production app should strongly consider the native `<dialog>` element
+  or a well-tested library rather than re-solving edge cases (e.g. dynamically
+  added/removed focusable children) from scratch.
+- **`querySelectorAll` on every open** is simple but re-scans the DOM each
+  time; fine for a small dialog, potentially worth caching for a very complex
+  one.
+
+### What interviewers probe for
+
+- Do you trap focus at all, or does Tab escape the dialog?
+- Do you restore focus on close (frequently missed)?
+- Do you close on Escape *and* backdrop click, and not close when clicking
+  inside the dialog itself?
+- Do you use the correct ARIA role/attributes, or just visual styling?

@@ -1,0 +1,61 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f7fb;
+  --panel: #ffffff;
+  --border: #e4e4ec;
+  --text: #1c1c28;
+  --text-dim: #6b6b7c;
+  --accent: #6366f1;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+code,
+pre {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+pre {
+  background: #1e1b2e;
+  color: #f4f4f8;
+  padding: 12px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+code:not(pre code) {
+  background: #eeeef6;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.app-shell {
+  display: flex;
+  height: 100%;
+}
+
+button {
+  font-family: inherit;
+}
+
+a {
+  color: var(--accent);
+}

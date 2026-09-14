@@ -1,0 +1,42 @@
+### The problem
+
+Make a todo list feel instant: when a user checks a box or adds an item, the
+UI should update immediately rather than waiting for a server round-trip —
+but it must also handle the server rejecting that change.
+
+### The approach
+
+**Optimistic update pattern**:
+
+1. Update local state immediately, as if the request already succeeded.
+2. Fire the request in the background.
+3. On success, mark it confirmed (or do nothing, since it already looks right).
+4. On failure, **roll back** — either revert to the previous state, or mark
+   the item with an error state and offer a retry, depending on what makes
+   sense for the action.
+
+This demo uses two rollback strategies on purpose: adding a todo shows an
+inline "failed to save, retry" state (since removing it would lose the user's
+typed text), while toggling "done" fully reverts to the prior list snapshot
+(since there's nothing to lose — the checkbox just flips back).
+
+### Trade-offs
+
+- **Optimistic vs. pessimistic** (wait for the server before updating UI):
+  optimistic feels much faster but adds complexity — every mutation needs a
+  rollback path, and conflicting rapid actions need care.
+- **Full-state snapshot rollback** vs. **field-level rollback**: snapshotting
+  the whole array before mutating (as `toggleDone` does) is simple and
+  correct, but for large lists you'd want a more targeted revert to avoid
+  reverting unrelated concurrent changes.
+- **Retry vs. silent revert**: silently reverting is fine for trivial toggles;
+  for anything the user typed (like adding a todo), keeping it visible with a
+  retry button respects their effort.
+
+### What interviewers probe for
+
+- Do you actually simulate/handle the failure path, or only the happy path?
+- Do concurrent optimistic updates to the *same* item interfere with each
+  other (a classic bug: an old rollback overwriting a newer optimistic state)?
+- Can you articulate when optimistic updates are a bad idea (e.g. payments,
+  anything where showing a false success is actively harmful)?
