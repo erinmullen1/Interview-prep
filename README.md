@@ -1,6 +1,6 @@
 # Frontend Interview Playground
 
-A self-study app for the most common mid-level frontend take-home and live-coding exercises. Each challenge is built as a real, working mini-feature (not a LeetCode puzzle), with an explanation of the approach, the trade-offs, and what interviewers probe for.
+A self-study app for the most common frontend take-home and live-coding exercises. Each challenge is built as a real, working mini-feature (not a LeetCode puzzle), with an explanation of the approach, the trade-offs, and what interviewers probe for.
 
 The app has three sections, switchable from the sidebar:
 
@@ -10,18 +10,18 @@ The app has three sections, switchable from the sidebar:
 
 ## Challenges included
 
-| Category | Challenge |
-| --- | --- |
-| Async & Data | Debounced Search / Autocomplete |
-| Async & Data | Infinite Scroll / Load More |
-| Async & Data | Pagination (Client vs. Server) |
-| State Management | Optimistic Todo List |
-| State Management | Shopping Cart State |
-| Forms | Multi-Field Form Validation |
-| UI Patterns | Sortable / Filterable Data Table |
-| UI Patterns | Drag-and-Drop Reorderable List |
-| UI Patterns & Accessibility | Accessible Modal Dialog |
-| UI Patterns & Accessibility | Tabs & Accordion (ARIA) |
+| Category                    | Challenge                        |
+| --------------------------- | -------------------------------- |
+| Async & Data                | Debounced Search / Autocomplete  |
+| Async & Data                | Infinite Scroll / Load More      |
+| Async & Data                | Pagination (Client vs. Server)   |
+| State Management            | Optimistic Todo List             |
+| State Management            | Shopping Cart State              |
+| Forms                       | Multi-Field Form Validation      |
+| UI Patterns                 | Sortable / Filterable Data Table |
+| UI Patterns                 | Drag-and-Drop Reorderable List   |
+| UI Patterns & Accessibility | Accessible Modal Dialog          |
+| UI Patterns & Accessibility | Tabs & Accordion (ARIA)          |
 
 ## Running it
 

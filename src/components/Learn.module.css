@@ -126,6 +126,45 @@
   line-height: 1.7;
 }
 
+.terms {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 20px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.terms summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.terms dl {
+  margin: 10px 0 4px;
+  display: grid;
+  gap: 8px;
+}
+
+.terms dt {
+  font-weight: 600;
+}
+
+.terms dd {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.summary {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--accent);
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
 .concept {
   font-size: 15px;
   line-height: 1.65;
