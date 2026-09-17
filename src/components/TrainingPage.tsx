@@ -106,6 +106,20 @@ function TrainingInner({ id }: { id?: string }) {
         </div>
       )}
 
+      <details className={styles.terms}>
+        <summary>Key terms used in this module ({module.terms.length})</summary>
+        <dl>
+          {module.terms.map((t) => (
+            <div key={t.term}>
+              <dt>{t.term}</dt>
+              <dd>
+                <Prose text={t.meaning} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+
       <div className={styles.progress}>
         <span>
           {done.length}/{total} lessons complete
@@ -139,6 +153,9 @@ function TrainingInner({ id }: { id?: string }) {
           Lesson {current + 1} of {total}
         </p>
         <h3>{step.title}</h3>
+        <p className={styles.summary}>
+          <Prose text={step.summary} />
+        </p>
 
         <p className={styles.sectionLabel}>The idea</p>
         <p className={styles.concept}>
