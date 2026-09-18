@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { categories, challenges } from '../challenges/registry'
+import { GENERAL_CATEGORY, generalTests } from '../tests/general'
 import styles from './Sidebar.module.css'
 
 interface SidebarProps {
@@ -63,6 +64,21 @@ export function Sidebar({ open }: SidebarProps) {
             ))}
         </div>
       ))}
+
+      {mode === 'tests' && (
+        <div>
+          <div className={styles.category}>{GENERAL_CATEGORY}</div>
+          {generalTests.map((t) => (
+            <NavLink
+              key={t.id}
+              to={`/tests/${t.id}`}
+              className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}
+            >
+              {t.title}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </nav>
   )
 }

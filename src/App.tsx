@@ -5,6 +5,7 @@ import { ChallengePage } from './components/ChallengePage'
 import { TrainingPage } from './components/TrainingPage'
 import { TestPage } from './components/TestPage'
 import { challenges } from './challenges/registry'
+import { GENERAL_CATEGORY, generalTests } from './tests/general'
 import styles from './components/Layout.module.css'
 
 function Landing() {
@@ -67,10 +68,25 @@ function TestsLanding() {
         the questions an interviewer is likely to ask after you build the feature.
       </p>
       <p>Your best score per test is saved in your browser.</p>
+      <h3>Challenge tests</h3>
       <ul>
         {challenges.map((c) => (
           <li key={c.id}>
             <Link to={`/tests/${c.id}`}>{c.title}</Link>
+          </li>
+        ))}
+      </ul>
+      <h3>{GENERAL_CATEGORY}</h3>
+      <p>
+        Background questions that get mixed into frontend interviews alongside the practical exercises:
+        language fundamentals, data structures, complexity, how the browser and network work, security,
+        and React itself.
+      </p>
+      <ul>
+        {generalTests.map((t) => (
+          <li key={t.id}>
+            <Link to={`/tests/${t.id}`}>{t.title}</Link>
+            <span style={{ color: 'var(--text-dim)' }}> — {t.description}</span>
           </li>
         ))}
       </ul>
