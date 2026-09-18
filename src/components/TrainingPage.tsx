@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getChallenge } from '../challenges/registry'
-import { getTraining } from '../training/content'
+import { getTraining, type KeyTerm, type TrainingStep } from '../training/content'
+import { getGeneralTraining } from '../training/general'
 import layout from './Layout.module.css'
 import styles from './Learn.module.css'
 
@@ -37,9 +38,29 @@ export function TrainingPage() {
   return <TrainingInner key={id ?? ''} id={id} />
 }
 
+interface ResolvedTraining {
+  title: string
+  intro: string
+  outcomes: string[]
+  terms: KeyTerm[]
+  steps: TrainingStep[]
+  /** Link to the finished demo, only for challenge-backed modules. */
+  demoId?: string
+}
+
+function resolveTraining(id: string): ResolvedTraining | undefined {
+  const challenge = getChallenge(id)
+  const challengeModule = getTraining(id)
+  if (challenge && challengeModule) {
+    return { ...challengeModule, title: challenge.title, demoId: challenge.id }
+  }
+  const general = getGeneralTraining(id)
+  if (general) return general
+  return undefined
+}
+
 function TrainingInner({ id }: { id?: string }) {
-  const challenge = id ? getChallenge(id) : undefined
-  const module = id ? getTraining(id) : undefined
+  const module = id ? resolveTraining(id) : undefined
 
   const [done, setDone] = useState<number[]>(() => (id ? loadDone(id) : []))
   const [current, setCurrent] = useState(() => {
@@ -62,7 +83,7 @@ function TrainingInner({ id }: { id?: string }) {
     document.querySelector('main')?.scrollTo({ top: 0 })
   }, [current])
 
-  if (!challenge || !module) {
+  if (!id || !module) {
     return (
       <div className={layout.landing}>
         <h2>Not found</h2>
@@ -91,8 +112,10 @@ function TrainingInner({ id }: { id?: string }) {
     <div className={styles.wrap}>
       <div className={layout.header}>
         <p className={styles.eyebrow}>Training</p>
-        <h2>{challenge.title}</h2>
-        <p>{module.intro}</p>
+        <h2>{module.title}</h2>
+        <p>
+          <Prose text={module.intro} />
+        </p>
       </div>
 
       {current === 0 && done.length === 0 && (
@@ -100,7 +123,9 @@ function TrainingInner({ id }: { id?: string }) {
           <p className={styles.sectionLabel}>By the end you will be able to</p>
           <ul>
             {module.outcomes.map((o) => (
-              <li key={o}>{o}</li>
+              <li key={o}>
+                <Prose text={o} />
+              </li>
             ))}
           </ul>
         </div>
@@ -127,9 +152,11 @@ function TrainingInner({ id }: { id?: string }) {
         <div className={styles.bar} aria-hidden="true">
           <div className={styles.barFill} style={{ width: `${pct}%` }} />
         </div>
-        <Link className={styles.btnLink} to={`/challenge/${challenge.id}`}>
-          View finished demo →
-        </Link>
+        {module.demoId && (
+          <Link className={styles.btnLink} to={`/challenge/${module.demoId}`}>
+            View finished demo →
+          </Link>
+        )}
       </div>
 
       <div className={styles.stepList} role="list">
@@ -209,7 +236,7 @@ function TrainingInner({ id }: { id?: string }) {
               </button>
             )}
             {isLast && isDone ? (
-              <Link className={styles.btnPrimary} to={`/tests/${challenge.id}`} style={{ textDecoration: 'none' }}>
+              <Link className={styles.btnPrimary} to={`/tests/${id}`} style={{ textDecoration: 'none' }}>
                 Take the test →
               </Link>
             ) : (

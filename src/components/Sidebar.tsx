@@ -65,13 +65,13 @@ export function Sidebar({ open }: SidebarProps) {
         </div>
       ))}
 
-      {mode === 'tests' && (
+      {mode !== 'challenge' && (
         <div>
           <div className={styles.category}>{GENERAL_CATEGORY}</div>
           {generalTests.map((t) => (
             <NavLink
               key={t.id}
-              to={`/tests/${t.id}`}
+              to={`/${mode}/${t.id}`}
               className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}
             >
               {t.title}

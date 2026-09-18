@@ -6,6 +6,7 @@ import { TrainingPage } from './components/TrainingPage'
 import { TestPage } from './components/TestPage'
 import { challenges } from './challenges/registry'
 import { GENERAL_CATEGORY, generalTests } from './tests/general'
+import { generalTraining } from './training/general'
 import styles from './components/Layout.module.css'
 
 function Landing() {
@@ -48,10 +49,23 @@ function TrainingLanding() {
       <p>
         Progress is saved in your browser. Finish a module and you will be pointed straight at its test.
       </p>
+      <h3>Challenge modules</h3>
       <ul>
         {challenges.map((c) => (
           <li key={c.id}>
             <Link to={`/training/${c.id}`}>{c.title}</Link>
+          </li>
+        ))}
+      </ul>
+      <h3>{GENERAL_CATEGORY}</h3>
+      <p>
+        The background topics interviewers ask about alongside the practical exercises. Same lesson format:
+        the idea, a code walkthrough, common mistakes, and a question to check yourself.
+      </p>
+      <ul>
+        {generalTraining.map((t) => (
+          <li key={t.id}>
+            <Link to={`/training/${t.id}`}>{t.title}</Link>
           </li>
         ))}
       </ul>
