@@ -1,5 +1,5 @@
 export interface WalkthroughSection {
-  /** Explanation of what to do and why. */
+  /** Explanation of what to do and why, in plain language. */
   text: string
   /** The code to write for this part, shown directly below the explanation. */
   code?: string
@@ -7,6 +7,8 @@ export interface WalkthroughSection {
 
 export interface TrainingStep {
   title: string
+  /** One sentence a beginner can hold onto. */
+  summary: string
   /** The idea behind this step: what you are learning and why it matters. */
   concept: string
   /** Ordered teaching sections, each pairing an explanation with the code it produces. */
@@ -17,11 +19,18 @@ export interface TrainingStep {
   checkpoint: string
 }
 
+export interface KeyTerm {
+  term: string
+  meaning: string
+}
+
 export interface TrainingModule {
   challengeId: string
   intro: string
   /** What you should be able to do after finishing. */
   outcomes: string[]
+  /** Jargon used in this module, explained in plain words. */
+  terms: KeyTerm[]
   steps: TrainingStep[]
 }
 
@@ -30,21 +39,29 @@ export const trainingModules: TrainingModule[] = [
   {
     challengeId: 'debounced-search',
     intro:
-      'A search box that fetches as the user types looks trivial, but it hides two classic problems: hammering the network on every keystroke, and slow responses arriving after fast ones. This module teaches the standard fix for both.',
+      'A search box that looks things up while you type seems simple. Underneath, it hides two classic problems: sending far too many requests, and slow answers arriving after fast ones and showing the wrong results. This module teaches the standard fix for both.',
     outcomes: [
-      'Explain debouncing and choose a sensible delay',
-      'Cancel stale requests with AbortController',
-      'Structure async effects with proper cleanup',
-      'Render loading, results and empty states correctly',
+      'Explain what debouncing is and pick a sensible delay',
+      'Cancel requests that are no longer needed',
+      'Write effects that clean up after themselves',
+      'Show loading, results, and "nothing found" states correctly',
+    ],
+    terms: [
+      { term: 'Controlled input', meaning: 'An input whose current text is stored in React state, so React (not the browser) is the source of truth.' },
+      { term: 'Debounce', meaning: 'Wait until the user stops typing for a moment before doing something, instead of doing it on every keystroke.' },
+      { term: 'Race condition', meaning: 'A bug where two things happen at once and the wrong one finishes last. Here: an old search response landing after a newer one.' },
+      { term: 'AbortController', meaning: 'A built-in browser tool that lets you cancel a request you started earlier.' },
+      { term: 'Effect cleanup', meaning: 'The function you return from useEffect. React runs it before the effect runs again, and when the component is removed.' },
     ],
     steps: [
       {
-        title: 'Controlled input and result state',
+        title: 'Set up the input and the state',
+        summary: 'Store what the user types, the results, and whether we are waiting, all in React state.',
         concept:
-          'In React, the input\'s text should live in state so the component, not the DOM, is the source of truth. That lets other logic (like the debounce in the next step) react to changes declaratively. Start by declaring every piece of state the feature needs, so the shape of the problem is clear before writing behaviour.',
+          'Before adding any clever behaviour, lay out the pieces of information the feature needs to remember. There are three: the text in the box, the list of results, and whether a request is currently running. Keeping the text in React state (a "controlled input") means the rest of the component can react whenever it changes.',
         walkthrough: [
           {
-            text: 'Declare three pieces of state. `input` is exactly what the user has typed. `results` holds whatever the API returned last. `loading` tells the UI whether a request is in flight.',
+            text: 'Declare the three pieces of state. `input` is exactly what the user has typed. `results` is what came back from the last search. `loading` is true while we are waiting for an answer.',
             code: `import { useEffect, useRef, useState } from 'react'
 
 export default function DebouncedSearch() {
@@ -53,7 +70,7 @@ export default function DebouncedSearch() {
   const [loading, setLoading] = useState(false)`,
           },
           {
-            text: 'Render a labelled, controlled input. `value` comes from state and `onChange` writes back to it. The `htmlFor`/`id` pair links the label to the field so screen readers announce it and clicking the label focuses the input.',
+            text: 'Render the input. `value` reads from state and `onChange` writes back to it. The label is linked to the input with `htmlFor` and `id`, so screen readers announce it and clicking the label focuses the box.',
             code: `  return (
     <div>
       <label htmlFor="search-input">Search libraries</label>
@@ -69,7 +86,7 @@ export default function DebouncedSearch() {
 }`,
           },
           {
-            text: 'You also need something to search against. In an interview you will usually mock the API. Write a function that filters a static list after a random delay, and accepts an `AbortSignal` so it can be cancelled later. The random latency is deliberate: it makes out-of-order responses possible, which is the bug you are about to solve.',
+            text: 'You need something to search. In an interview you will usually fake the server. This function filters a fixed list after a random delay. The random delay matters: it means a slow request can finish after a fast one, which is exactly the bug you will fix in step 3. It also accepts an `AbortSignal` so it can be cancelled.',
             code: `const CATALOG = ['React', 'React Router', 'Redux', 'Vue', 'Svelte', 'TypeScript', 'Vite', 'Tailwind CSS']
 
 function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
@@ -87,48 +104,50 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
           },
         ],
         pitfalls: [
-          'Reading the value from the DOM with a ref instead of state. It works, but nothing else in the component can react to changes.',
-          'Forgetting the label. An unlabelled input is an accessibility failure interviewers notice immediately.',
+          'Reading the text straight from the DOM with a ref. It works, but nothing else in the component can respond when it changes.',
+          'Leaving out the label. An unlabelled input is an accessibility failure interviewers spot straight away.',
         ],
-        checkpoint: 'In your own words: what does "controlled input" mean, and what does it buy you here?',
+        checkpoint: 'In your own words: what is a controlled input, and why do we want one here?',
       },
       {
-        title: 'Debounce the typed value',
+        title: 'Wait for the user to pause (debounce)',
+        summary: 'Keep a second copy of the text that only updates 300ms after typing stops.',
         concept:
-          'Debouncing means waiting until the user pauses before acting. Instead of firing a request per keystroke, you keep a second state value, `debounced`, that only catches up with `input` after 300ms of silence. Every new keystroke restarts the clock. The key mechanism is the effect cleanup: React runs the previous effect\'s cleanup before running the new one, so the pending timer is cancelled automatically.',
+          'If you search on every keystroke, typing "react" sends five requests. Debouncing means waiting for a short pause before acting. You keep a second state value, `debounced`, that catches up with `input` only after 300ms of silence. Each new keystroke restarts the clock. The trick that makes this work is effect cleanup: React runs the previous cleanup before running the effect again, so the old timer is cancelled for you.',
         walkthrough: [
           {
-            text: 'Add the `debounced` state next to the others.',
+            text: 'Add the second state value.',
             code: `const [debounced, setDebounced] = useState('')`,
           },
           {
-            text: 'Write an effect that depends only on `input`. It starts a 300ms timer that copies `input` into `debounced`. The returned cleanup clears the timer. Trace what happens when the user types "r", "e", "a" quickly: three effects run, but the first two timers are cleared before firing, so `setDebounced` runs once, with "rea".',
+            text: 'Write an effect that runs whenever `input` changes. It starts a 300ms timer that copies `input` into `debounced`. The cleanup cancels the timer. Trace it: type "r", "e", "a" quickly. Three effects run, but the first two timers are cancelled before they fire, so `setDebounced` runs once, with "rea".',
             code: `useEffect(() => {
   const timer = setTimeout(() => setDebounced(input), 300)
   return () => clearTimeout(timer)
 }, [input])`,
           },
           {
-            text: 'Why 300ms? Shorter feels more instant but sends more requests; longer saves requests but starts to feel laggy. 200 to 400ms is the usual range. Be ready to say this out loud rather than treating the number as magic.',
+            text: 'Why 300ms? Shorter feels snappier but sends more requests. Longer saves requests but starts to feel sluggish. Anything from 200 to 400ms is normal. Be ready to explain this rather than treating the number as magic.',
           },
         ],
         pitfalls: [
-          'Putting the fetch inside this same effect. It works, but it couples typing timing with network timing and makes both harder to reason about.',
-          'Forgetting the cleanup, which means every keystroke eventually fires its own `setDebounced`.',
+          'Doing the search inside this same effect. It works, but now typing speed and network speed are tangled together and harder to reason about.',
+          'Forgetting the cleanup. Then every keystroke eventually fires its own timer and you are back to one search per key.',
         ],
-        checkpoint: 'Explain the sequence of events when a user types three characters within 300ms. How many times does `setDebounced` run?',
+        checkpoint: 'A user types three letters within 300ms. How many times does `setDebounced` run, and why?',
       },
       {
-        title: 'Fetch on the debounced value and cancel stale requests',
+        title: 'Search, and cancel searches that are out of date',
+        summary: 'Fetch when the debounced text changes, and cancel the previous fetch so an old answer can never overwrite a new one.',
         concept:
-          'Now fetch only when `debounced` changes. The subtle bug here is a race: request A for "re" might be slow and request B for "react" fast, so A\'s response lands last and overwrites the correct results with stale ones. The fix is to abort the previous request whenever a new one starts. AbortController is the browser primitive for this, and the effect cleanup is the natural place to call it.',
+          'Now fetch whenever `debounced` changes. The subtle bug: you search "re", it is slow. You then search "react", it is fast. "react" results show, then the "re" results arrive and replace them. That is a race condition. The fix is to cancel the previous request whenever a new one starts. `AbortController` is the browser tool for this, and the effect cleanup is the natural place to call it.',
         walkthrough: [
           {
-            text: 'Keep the current controller in a ref so it survives re-renders without causing them.',
+            text: 'Keep the current controller in a ref. A ref is a box that survives re-renders without causing them.',
             code: `const abortRef = useRef<AbortController | null>(null)`,
           },
           {
-            text: 'Write the fetch effect. If the query is blank, clear everything and return early. Otherwise abort any previous controller, create a fresh one, flag loading, and call the API with its signal.',
+            text: 'Start the effect. If the box is empty, clear everything and stop. Otherwise cancel the previous controller, make a new one, mark loading, and call the API with the new signal.',
             code: `useEffect(() => {
   if (!debounced.trim()) {
     setResults([])
@@ -141,7 +160,7 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
   setLoading(true)`,
           },
           {
-            text: 'Handle the promise. On success store results and clear loading. In the catch, an `AbortError` is expected, not a failure: a newer request is now in flight and owns the loading flag, so do nothing. Return a cleanup that aborts, which covers both "a newer value arrived" and "the component unmounted".',
+            text: 'Handle the answer. On success, store results and stop loading. In the catch, an `AbortError` is expected, not a failure: a newer request is running and is in charge of the loading flag, so do nothing. Return a cleanup that aborts. That covers both "a newer search started" and "the component was removed".',
             code: `  fakeSearchApi(debounced, controller.signal)
     .then((data) => {
       setResults(data)
@@ -155,22 +174,23 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
           },
         ],
         pitfalls: [
-          'Clearing `loading` on AbortError. That shows "0 results" for a moment while the newer request is still running.',
-          'Not cleaning up on unmount, which leads to setState on an unmounted component.',
+          'Setting loading to false on AbortError. That briefly shows "0 results" while the newer request is still running.',
+          'Not cleaning up on unmount. You get a React warning about updating state on a component that no longer exists.',
         ],
-        checkpoint: 'Walk through the "re" then "react" race without abort, then with it. Where exactly does the stale write get stopped?',
+        checkpoint: 'Walk through the "re" then "react" example without cancellation, then with it. At what exact line does the stale result get stopped?',
       },
       {
-        title: 'Render loading, results and empty states',
+        title: 'Show loading, results, and "no matches"',
+        summary: 'Every async UI needs three visible states: waiting, got data, got nothing.',
         concept:
-          'Every async UI has at least three states the user must be able to distinguish: waiting, data, and no data. Missing the empty state is one of the most common gaps in take-home submissions.',
+          'Users need to tell the difference between "still searching", "here are results", and "nothing matched". Forgetting the last one is one of the most common gaps in take-home submissions.',
         walkthrough: [
           {
-            text: 'Show a status line. While loading say so; otherwise show the count.',
+            text: 'A status line: say "Searching…" while loading, otherwise show a count.',
             code: `<div>{loading ? 'Searching…' : \`\${results.length} result\${results.length === 1 ? '' : 's'}\`}</div>`,
           },
           {
-            text: 'Render the list. Then add the empty message, guarded three ways: not loading (otherwise it flashes before data arrives), the debounced query is non-empty (an untouched box should be blank, not "No matches"), and results are empty.',
+            text: 'The list, plus the empty message. The empty message has three guards: not loading (or it flashes before data arrives), the debounced text is not blank (an untouched box should be empty, not say "No matches"), and results are empty.',
             code: `<ul>
   {results.map((r) => (
     <li key={r}>{r}</li>
@@ -179,21 +199,22 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
 </ul>`,
           },
           {
-            text: 'Note the guard uses `debounced`, not `input`. Between a keystroke and the debounce firing, `input` is ahead of the results, and checking it would show a misleading empty message.',
+            text: 'Notice the guard checks `debounced`, not `input`. Between a keystroke and the timer firing, `input` is ahead of the results. Checking it would show "No matches" for text we have not searched yet.',
           },
         ],
-        checkpoint: 'Why does the empty-state guard check `debounced` rather than `input`?',
+        checkpoint: 'Why does the "No matches" check use `debounced` instead of `input`?',
       },
       {
-        title: 'Review and extract',
+        title: 'Review, then tidy up',
+        summary: 'Check the interviewer list, then pull the debounce into a reusable hook.',
         concept:
-          'Before calling it done, audit against what interviewers actually probe, and consider what you would extract if this pattern repeated across an app.',
+          'Before you call it done, check it against what interviewers actually look for. Then notice that the debounce logic has nothing to do with search and could be reused anywhere.',
         walkthrough: [
           {
-            text: 'Checklist: race condition handled (abort in cleanup), timers and requests cleaned up on unmount, loading and empty states visible, label present.',
+            text: 'Checklist: stale responses cancelled (abort in cleanup), timers and requests cleaned up on unmount, loading and empty states visible, label present.',
           },
           {
-            text: 'The debounce effect is completely generic. Pull it into a hook. Same effect, just parameterised, and now the component reads as "debounce, then fetch".',
+            text: 'The debounce effect is generic. Move it into a custom hook. Same code, just given a name and parameters. The component now reads as "debounce, then fetch".',
             code: `function useDebouncedValue<T>(value: T, delay = 300): T {
   const [debounced, setDebounced] = useState(value)
   useEffect(() => {
@@ -207,10 +228,10 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
 const debounced = useDebouncedValue(input, 300)`,
           },
           {
-            text: 'Know the alternative. Throttling fires at a fixed rate regardless of pauses, which suits things like scroll position. Debouncing waits for a pause, which suits search because partial mid-word results add nothing.',
+            text: 'Know the alternative. Throttling runs at a fixed rate no matter what (for example, at most once every 200ms), which suits things like tracking scroll position. Debouncing waits for a pause, which suits search because half-typed words are not worth searching.',
           },
         ],
-        checkpoint: 'Give one example where throttling is the right choice and one where debouncing is.',
+        checkpoint: 'Give one situation where throttling is the better choice, and one where debouncing is.',
       },
     ],
   },
@@ -218,21 +239,28 @@ const debounced = useDebouncedValue(input, 300)`,
   {
     challengeId: 'infinite-scroll',
     intro:
-      'Infinite scroll loads more content as the user nears the bottom. The naive approach uses scroll events and pixel math; the modern approach uses IntersectionObserver and a sentinel element. This module builds the latter and covers the accessibility conversation you should be ready for.',
+      'Infinite scroll loads more items as you near the bottom of a list. The old way listens to scroll events and does pixel maths. The modern way asks the browser to tell you when an invisible marker comes into view. This module builds the modern way and covers the accessibility conversation you should be ready for.',
     outcomes: [
       'Explain why IntersectionObserver beats scroll listeners',
-      'Model paged data and avoid duplicate requests',
+      'Load pages of data without requesting the same page twice',
       'Use functional state updates correctly',
       'Discuss the accessibility trade-offs of infinite scroll',
     ],
+    terms: [
+      { term: 'Sentinel', meaning: 'An invisible element placed at the end of the list. When it comes into view, we know the user has reached the bottom.' },
+      { term: 'IntersectionObserver', meaning: 'A browser feature that tells you when an element becomes visible on screen, without you checking scroll position yourself.' },
+      { term: 'Functional update', meaning: 'Calling setState with a function, like `setItems((prev) => ...)`, so you always work from the latest value.' },
+      { term: 'Stale closure', meaning: 'A function that captured an old value of a variable and keeps using it after the variable has changed.' },
+    ],
     steps: [
       {
-        title: 'Model the paged data',
+        title: 'Track what has been loaded',
+        summary: 'Keep the items so far, the next page number, whether more exist, and whether a request is running.',
         concept:
-          'The client never has the whole list, so it must track what it has, where it is, and whether more exists. A paged API returns items plus some signal of completeness, either `hasMore` or a total count.',
+          'The browser never has the whole list. So it must remember what it has, which page comes next, and whether there is anything left. A paged API sends back items plus some signal that says "more" or "done".',
         walkthrough: [
           {
-            text: 'Mock a paged API. It resolves one page of `PAGE_SIZE` items and a `hasMore` flag after a short delay.',
+            text: 'Fake a paged API. It returns one page of items and a `hasMore` flag after a short delay.',
             code: `const PAGE_SIZE = 15
 const TOTAL_ITEMS = 120
 
@@ -248,22 +276,23 @@ function fakeFetchPage(page: number): Promise<{ items: string[]; hasMore: boolea
 }`,
           },
           {
-            text: 'Declare state for the accumulated items, the next page index, whether more exist, and whether a request is in flight. `loading` is not cosmetic here: it is the guard against duplicate requests later.',
+            text: 'Declare the state. `loading` is not just for a spinner: in step 3 it stops us requesting the same page twice.',
             code: `const [items, setItems] = useState<string[]>([])
 const [page, setPage] = useState(0)
 const [hasMore, setHasMore] = useState(true)
 const [loading, setLoading] = useState(false)`,
           },
         ],
-        checkpoint: 'Why can the client not decide by itself whether more pages exist?',
+        checkpoint: 'Why can the browser not work out on its own whether more pages exist?',
       },
       {
-        title: 'Write loadNext',
+        title: 'Write the function that loads the next page',
+        summary: 'Fetch the current page, add its items to the end, and move the page counter on.',
         concept:
-          'One function fetches the current page, appends it, and advances the counter. Because new state depends on old state, use functional updates. Wrap it in `useCallback` so the observer effect in a later step can list it as a dependency without re-creating the observer every render.',
+          'One function does the fetching. Because the new list depends on the old list, use a functional update so you always append to the latest version. Wrap it in `useCallback` so step 3 can list it as a dependency without recreating the observer on every render.',
         walkthrough: [
           {
-            text: 'Fetch `page`, then append with a functional update. `setItems((prev) => [...prev, ...newItems])` reads the latest state at update time; `setItems([...items, ...newItems])` would read whatever `items` was when the closure was created and could drop a page.',
+            text: 'Fetch, then append. `setItems((prev) => [...prev, ...newItems])` reads the newest list at the moment it runs. `setItems([...items, ...newItems])` would use whatever `items` was when the function was created, and can silently drop a page.',
             code: `const loadNext = useCallback(() => {
   setLoading(true)
   fakeFetchPage(page).then(({ items: newItems, hasMore: more }) => {
@@ -275,30 +304,31 @@ const [loading, setLoading] = useState(false)`,
 }, [page])`,
           },
           {
-            text: 'Load the first page on mount. The empty dependency array is intentional: this should run once. (Under StrictMode in development, React mounts twice, so you may see the first page loaded twice; a production build does not do this.)',
+            text: 'Load the first page when the component appears. The empty dependency list means "run once". (In development, React StrictMode mounts components twice, so you may see the first page twice. Production builds do not do this.)',
             code: `useEffect(() => {
   loadNext()
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [])`,
           },
         ],
-        pitfalls: ['Using `items` directly inside the promise callback. Stale closures are the number one infinite-scroll bug.'],
+        pitfalls: ['Using `items` directly inside the promise callback. This stale-closure bug is the number one infinite-scroll mistake.'],
         checkpoint: 'What could go wrong if `loadNext` used `setItems([...items, ...newItems])`?',
       },
       {
-        title: 'Add a sentinel and observe it',
+        title: 'Watch a marker at the bottom of the list',
+        summary: 'Put an invisible element after the last item and ask the browser to tell you when it appears.',
         concept:
-          'Instead of measuring scroll position, place an invisible element at the bottom of the list and ask the browser to tell you when it becomes visible. IntersectionObserver does this asynchronously and off the main thread\'s hot path, so there is no throttling to write and no pixel math to get wrong.',
+          'Instead of measuring scroll position on every scroll event, place a tiny invisible element (the sentinel) after the last item and let `IntersectionObserver` tell you when it scrolls into view. The browser does this efficiently in the background. There is no throttling to write and no pixel maths to get wrong.',
         walkthrough: [
           {
-            text: 'Create a ref and render a 1px div after the last item, inside the scrollable container.',
+            text: 'Create a ref and render a 1px-tall div after the items, inside the scrolling box.',
             code: `const sentinelRef = useRef<HTMLDivElement | null>(null)
 
 // inside the scroll container, after the items:
 <div ref={sentinelRef} style={{ height: 1 }} />`,
           },
           {
-            text: 'Set up the observer in an effect. Bail early if there is no node or nothing more to load. `rootMargin: "200px"` expands the detection area so the load starts before the user actually reaches the gap. In the callback, only call `loadNext` if the sentinel is intersecting and no request is already running. Disconnect in cleanup.',
+            text: 'Set up the observer in an effect. Stop early if there is no element or nothing more to load. `rootMargin: "200px"` makes the observer fire when the sentinel is within 200px of the visible area, so loading starts before the user actually hits the bottom. In the callback, only load if the sentinel is visible and nothing is already loading. Disconnect in cleanup.',
             code: `useEffect(() => {
   const node = sentinelRef.current
   if (!node || !hasMore) return
@@ -313,22 +343,23 @@ const [loading, setLoading] = useState(false)`,
 }, [hasMore, loading, loadNext])`,
           },
           {
-            text: 'The dependency array matters. When `loading` flips or `page` changes, the effect re-runs with a fresh closure, so the callback never sees a stale `loading` value.',
+            text: 'The dependency list matters. When `loading` flips or the page changes, the effect re-runs with fresh values, so the callback never uses an out-of-date `loading`.',
           },
         ],
         pitfalls: [
-          'Forgetting the `!loading` guard. The observer can fire repeatedly while the sentinel stays visible, requesting the same page again and duplicating items.',
-          'Not disconnecting, which leaks observers on every re-run.',
+          'Forgetting the `!loading` check. The observer can fire repeatedly while the sentinel is on screen, requesting the same page again and duplicating items.',
+          'Not disconnecting. Each re-run would leave another observer running.',
         ],
-        checkpoint: 'What does `rootMargin` change about when the callback fires, and why is that useful here?',
+        checkpoint: 'What does `rootMargin` change about when the callback fires, and why is that helpful?',
       },
       {
-        title: 'Finish the UI and talk about accessibility',
+        title: 'Finish the UI and know the trade-offs',
+        summary: 'Show progress and an end message, and be able to explain why infinite scroll has accessibility costs.',
         concept:
-          'The visible states are simple. The harder part is knowing that infinite scroll has real accessibility costs, and being able to say so in an interview even when you implement it.',
+          'The visible states are easy. The harder part is knowing infinite scroll has real downsides for keyboard and screen-reader users, and being able to say so in an interview even while you build it.',
         walkthrough: [
           {
-            text: 'Show progress, a loading line, and an end-of-list line.',
+            text: 'Show a count, a loading line, and an end-of-list line.',
             code: `<div>Scrollable feed ({items.length}/{TOTAL_ITEMS} loaded)</div>
 <div style={{ height: 260, overflowY: 'auto' }}>
   {items.map((item) => <div key={item}>{item}</div>)}
@@ -338,10 +369,10 @@ const [loading, setLoading] = useState(false)`,
 </div>`,
           },
           {
-            text: 'The trade-off: keyboard and screen-reader users can get trapped in a page that keeps growing, never reaching the footer. Items are also hard to bookmark by position. A common production compromise is infinite scroll visually, plus a real "Load more" button as an accessible escape hatch. Mentioning this unprompted is a strong signal.',
+            text: 'The trade-off: someone navigating by keyboard or screen reader can get stuck in a page that keeps growing and never reach the footer. Items are also hard to bookmark by position. A common compromise is infinite scroll for mouse users plus a real "Load more" button as an escape hatch. Raising this without being asked is a strong signal.',
           },
         ],
-        checkpoint: 'Name one accessibility problem with infinite scroll and one concrete mitigation.',
+        checkpoint: 'Name one accessibility problem with infinite scroll and one practical way to reduce it.',
       },
     ],
   },
@@ -349,21 +380,28 @@ const [loading, setLoading] = useState(false)`,
   {
     challengeId: 'optimistic-todo',
     intro:
-      'Optimistic UI updates the screen before the server confirms, then rolls back on failure. It is how modern apps feel instant. The skill is in the failure path: every mutation needs a rollback strategy, and the right strategy depends on what the user would lose.',
+      'An optimistic UI updates the screen straight away, before the server has confirmed, then undoes the change if the server says no. It is how modern apps feel instant. The skill is in the failure path: every change needs a way to roll back, and the right way depends on what the user would lose.',
     outcomes: [
-      'Implement the optimistic update pattern end to end',
-      'Choose between inline-error and snapshot rollback',
-      'Avoid conflicting concurrent updates to one item',
-      'Know when optimistic updates are inappropriate',
+      'Implement the optimistic update pattern from start to finish',
+      'Choose between "show an error" and "revert to a snapshot" rollbacks',
+      'Avoid two overlapping changes to the same item',
+      'Know when optimistic updates are a bad idea',
+    ],
+    terms: [
+      { term: 'Optimistic update', meaning: 'Show the change immediately, assuming the server will accept it. Fix things up afterwards if it does not.' },
+      { term: 'Pessimistic update', meaning: 'The opposite: wait for the server to confirm before showing the change. Safer but feels slower.' },
+      { term: 'Rollback', meaning: 'Undoing an optimistic change because the server rejected it.' },
+      { term: 'Snapshot', meaning: 'A saved copy of the state from before a change, so you can restore it.' },
     ],
     steps: [
       {
-        title: 'Put save status on each item',
+        title: 'Give each todo a save status',
+        summary: 'Each item records whether it is saved, saving, or failed, so each row can show its own state.',
         concept:
-          'The UI needs to show, per row, whether a change is pending, confirmed, or failed. The simplest way is to carry a `status` field on each todo rather than tracking pending ids separately. And because you cannot test a rollback path without failures, the mock API must fail sometimes.',
+          'Each row needs to show whether its last change is pending, confirmed, or failed. The simplest way is a `status` field on the todo itself. And because you cannot test rollback without failures, the fake server must fail sometimes.',
         walkthrough: [
           {
-            text: 'Define the model. `status` is a small union that drives the row\'s appearance.',
+            text: 'The model. `status` is a small set of allowed strings that drives how the row looks.',
             code: `interface Todo {
   id: string
   text: string
@@ -372,7 +410,7 @@ const [loading, setLoading] = useState(false)`,
 }`,
           },
           {
-            text: 'Mock a flaky backend that rejects roughly 30% of the time. If your API never fails in development, you will ship a rollback that has never run.',
+            text: 'A flaky fake server that fails about 30% of the time. If it never fails while you develop, you will ship a rollback that has never actually run.',
             code: `function fakeSaveApi(): Promise<void> {
   return new Promise((resolve, reject) => {
     setTimeout(() => (Math.random() < 0.3 ? reject(new Error('Network error')) : resolve()), 700)
@@ -380,7 +418,7 @@ const [loading, setLoading] = useState(false)`,
 }`,
           },
           {
-            text: 'Seed state and add an input value.',
+            text: 'Starting state, plus the text in the input box.',
             code: `const [todos, setTodos] = useState<Todo[]>([
   { id: 'a', text: 'Review pull request', done: false, status: 'saved' },
   { id: 'b', text: 'Write unit tests', done: true, status: 'saved' },
@@ -388,15 +426,16 @@ const [loading, setLoading] = useState(false)`,
 const [text, setText] = useState('')`,
           },
         ],
-        checkpoint: 'Why is a mock API that always succeeds dangerous for this feature?',
+        checkpoint: 'Why is a fake server that always succeeds risky for this feature?',
       },
       {
-        title: 'Optimistic add with an inline error',
+        title: 'Add a todo optimistically, keep it on failure',
+        summary: 'Insert the todo immediately. If saving fails, mark it as failed rather than deleting it.',
         concept:
-          'When the user adds a todo, insert it immediately with `status: "saving"` and clear the input. If the save fails, do not delete the row: the user typed that text, and removing it destroys their work. Mark it as an error and let them retry.',
+          'When the user adds a todo, put it in the list straight away with `status: "saving"` and clear the input. If the save fails, do not delete the row: the user typed that text, and throwing it away destroys their work. Mark it as failed and offer a retry.',
         walkthrough: [
           {
-            text: 'Generate an id, push the item, clear the input. All of this happens before any network call. Use a functional update so it composes with other in-flight updates.',
+            text: 'Make an id, add the item, clear the input. All before any network call. The functional update means this works even if other changes are mid-flight.',
             code: `let nextId = 1
 
 function addTodo() {
@@ -406,23 +445,24 @@ function addTodo() {
   setText('')`,
           },
           {
-            text: 'Fire the save. On success, flip that one item to `saved`. On failure, flip it to `error`. Notice both branches map by id, touching only the affected row.',
+            text: 'Send the save. On success, set that one item to `saved`. On failure, set it to `error`. Both branches find the item by id and leave everything else untouched.',
             code: `  fakeSaveApi()
     .then(() => setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'saved' } : t))))
     .catch(() => setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, status: 'error' } : t))))
 }`,
           },
         ],
-        pitfalls: ['Removing the item on failure. Interviewers will ask what happened to the user\'s text.'],
+        pitfalls: ['Removing the item on failure. Interviewers will ask what happened to the text the user typed.'],
         checkpoint: 'Why is "mark as error" the right rollback for adding, rather than "remove the row"?',
       },
       {
-        title: 'Optimistic toggle with snapshot rollback',
+        title: 'Toggle "done" optimistically, revert on failure',
+        summary: 'Flip the checkbox immediately. If saving fails, restore the list from a saved copy.',
         concept:
-          'Toggling "done" is different: reverting loses nothing, so the simplest rollback is to snapshot the whole list before mutating and restore it on failure. This is easy and correct for a single change, but has a known weakness with concurrent changes, which you should be able to name.',
+          'Toggling "done" is different: undoing it loses nothing, so the simplest rollback is to save a copy of the list before changing it and restore that copy on failure. This is easy and correct for one change at a time. It has a known weakness with overlapping changes, which you should be able to describe.',
         walkthrough: [
           {
-            text: 'Capture the current list, apply the optimistic flip, then restore the snapshot on failure.',
+            text: 'Save a copy, apply the optimistic flip, restore the copy on failure.',
             code: `function toggleDone(id: string) {
   const previous = todos
   setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done, status: 'saving' } : t)))
@@ -432,16 +472,17 @@ function addTodo() {
 }`,
           },
           {
-            text: 'The weakness: if the user toggles item A, then item B, and A fails, restoring A\'s snapshot also undoes B\'s optimistic change. For large or busy lists you would revert only the affected field. The demo sidesteps the worst case by disabling a checkbox while its row is saving.',
+            text: 'The weakness: toggle A, then toggle B, then A fails. Restoring A\'s snapshot also undoes B\'s change, because the snapshot was taken before B. For busy lists you would revert just the one field. The demo avoids the worst case by disabling a checkbox while its row is saving.',
           },
         ],
-        pitfalls: ['Reading `previous` from inside a functional updater. The snapshot must be taken synchronously before the optimistic write.'],
-        checkpoint: 'Describe a sequence of two toggles where full-snapshot rollback produces the wrong result.',
+        pitfalls: ['Taking the snapshot inside the functional updater. It must be captured before the optimistic write, as a plain variable.'],
+        checkpoint: 'Describe two toggles in a row where restoring the whole snapshot gives the wrong result.',
       },
       {
-        title: 'Retry, per-row status, and knowing the limits',
+        title: 'Retry, show status per row, and know the limits',
+        summary: 'Give failed rows a Retry button, lock rows while saving, and know when not to be optimistic.',
         concept:
-          'A failed state needs a way out. Add retry, render status per row, and lock rows that are mid-save. Then be ready to say when optimistic updates are the wrong tool.',
+          'A failed row needs a way out. Add retry, show status on each row, and disable rows that are mid-save so two changes cannot overlap. Then be ready to say when optimistic updates are the wrong tool.',
         walkthrough: [
           {
             text: 'Retry is the add flow without the insert.',
@@ -453,7 +494,7 @@ function addTodo() {
 }`,
           },
           {
-            text: 'Render each row. The checkbox is disabled while saving so two changes to one item cannot overlap. Error rows show the message and a Retry button.',
+            text: 'Each row. The checkbox is disabled while saving so two changes to one item cannot overlap. Failed rows show a message and a Retry button.',
             code: `<li key={t.id}>
   <input type="checkbox" checked={t.done} onChange={() => toggleDone(t.id)} disabled={t.status === 'saving'} />
   <span style={{ textDecoration: t.done ? 'line-through' : 'none' }}>{t.text}</span>
@@ -467,10 +508,10 @@ function addTodo() {
 </li>`,
           },
           {
-            text: 'When not to do this: anything where a false success is harmful. Payments, irreversible deletions, sending messages. For those, wait for the server (pessimistic) and show a spinner.',
+            text: 'When not to do this: anywhere showing a false success would hurt. Payments, deleting something permanently, sending a message. For those, wait for the server and show a spinner.',
           },
         ],
-        checkpoint: 'Name a feature where optimistic UI would be actively harmful, and explain why.',
+        checkpoint: 'Name a feature where an optimistic update would be harmful, and say why.',
       },
     ],
   },
@@ -478,18 +519,26 @@ function addTodo() {
   {
     challengeId: 'form-validation',
     intro:
-      'A signup form with three fields sounds easy, but it combines sync validation, an async server check, and error messaging that must work for screen readers. This module builds it by hand so you understand what form libraries do for you.',
+      'A three-field signup form sounds easy. It actually combines instant checks (is this long enough?), a server check (is this username taken?), and error messages that must work for screen readers. This module builds it by hand so you understand what form libraries do for you.',
     outcomes: [
-      'Show errors at the right moment using touched state',
-      'Derive validation during render instead of storing it',
-      'Debounce and cancel an async server check',
-      'Wire aria-invalid, aria-describedby and role="alert"',
+      'Show errors at the right moment, not too early',
+      'Compute validation from state instead of storing it',
+      'Debounce and cancel a server-side check',
+      'Make error messages reach screen readers',
+    ],
+    terms: [
+      { term: 'Touched', meaning: 'A field the user has visited and left at least once. We only show errors for touched fields.' },
+      { term: 'Derived value', meaning: 'Something computed from state during render, rather than stored in state itself. Errors here are derived.' },
+      { term: 'aria-invalid', meaning: 'An attribute that tells assistive technology the field currently has a problem.' },
+      { term: 'aria-describedby', meaning: 'Links a field to another element (like an error message) so that message is read out when the field is focused.' },
+      { term: 'role="alert"', meaning: 'Makes a screen reader announce the element\'s text as soon as it appears.' },
     ],
     steps: [
       {
-        title: 'Controlled fields and touched tracking',
+        title: 'Track which fields the user has visited',
+        summary: 'Only show an error for a field after the user has left it once.',
         concept:
-          'Showing "too short" while someone is still typing their first character is hostile. The standard pattern: validate on blur first, then live-update. To do that you track which fields have been visited.',
+          'Showing "too short" while someone is still typing their first letter is hostile. The pattern most users like: check when they leave the field, then update live after that. To do this you record which fields have been visited ("touched").',
         walkthrough: [
           {
             text: 'State for each field, plus a `touched` record keyed by field name.',
@@ -499,7 +548,7 @@ const [password, setPassword] = useState('')
 const [touched, setTouched] = useState<Record<string, boolean>>({})`,
           },
           {
-            text: 'Each input marks itself touched on blur. Merge into the record so other fields keep their state.',
+            text: 'Each input marks itself touched when it loses focus (`onBlur`). Merge into the record so other fields keep their value.',
             code: `<input
   id="fv-username"
   value={username}
@@ -508,15 +557,16 @@ const [touched, setTouched] = useState<Record<string, boolean>>({})`,
 />`,
           },
         ],
-        checkpoint: 'Compare validate-on-change, validate-on-blur, and validate-on-submit. What is wrong with each in isolation?',
+        checkpoint: 'Compare checking on every keystroke, checking on blur, and checking only on submit. What annoys users about each one alone?',
       },
       {
-        title: 'Derive sync errors during render',
+        title: 'Work out errors during render',
+        summary: 'Errors are computed from the values every render, never stored in state.',
         concept:
-          'Errors are a pure function of the current values and touched flags, so compute them during render. Storing them in state and syncing with an effect adds a render of lag and a second source of truth that can drift.',
+          'The error for a field depends only on its current value and whether it is touched. So compute it during render. Storing errors in state and keeping them in sync with an effect adds a delay of one render and creates a second copy that can drift out of date.',
         walkthrough: [
           {
-            text: 'Build an `errors` object each render. Each rule only applies if the field is touched.',
+            text: 'Build an `errors` object each render. Each rule applies only if the field is touched.',
             code: `interface Errors { username?: string; email?: string; password?: string }
 
 const errors: Errors = {}
@@ -525,26 +575,27 @@ if (touched.email && !/^\\S+@\\S+\\.\\S+$/.test(email)) errors.email = 'Enter a 
 if (touched.password && password.length < 8) errors.password = 'Password must be at least 8 characters.'`,
           },
           {
-            text: 'Compute `isValid` separately, from the raw values and ignoring `touched`. This is what submit checks. If it respected `touched`, an untouched form would count as valid.',
+            text: 'Compute `isValid` separately from the raw values, ignoring `touched`. This is what submit checks. If it respected `touched`, an untouched form would count as valid.',
             code: `const isValid =
   username.trim().length >= 3 &&
   /^\\S+@\\S+\\.\\S+$/.test(email) &&
   password.length >= 8`,
           },
           {
-            text: 'The email regex is deliberately loose: has something, an @, something, a dot, something. Fully RFC-compliant regexes are a rabbit hole and still cannot prove the inbox exists. The real check is a confirmation email.',
+            text: 'The email pattern is deliberately loose: some text, an @, some text, a dot, some text. Trying to match the full email specification is a famous rabbit hole and still cannot prove the inbox exists. The real check is sending a confirmation email.',
           },
         ],
-        pitfalls: ['Storing `errors` in state and updating it in an effect. Derive it.'],
-        checkpoint: 'Why must `isValid` ignore `touched` while `errors` respects it?',
+        pitfalls: ['Keeping `errors` in state and updating it in an effect. Compute it instead.'],
+        checkpoint: 'Why must `isValid` ignore `touched` while `errors` uses it?',
       },
       {
-        title: 'Async username check with debounce and abort',
+        title: 'Check the username with the server',
+        summary: 'Wait 400ms after typing stops, ask the server, and cancel the check if the user keeps typing.',
         concept:
-          'Checking "is this username taken" requires a server call. Doing it on every keystroke spams the server and can resolve out of order. This is exactly the debounced-search pattern: wait 400ms after typing stops, run the check, and cancel it if a newer keystroke arrives.',
+          '"Is this username taken?" needs a server call. Doing it on every keystroke floods the server and can return answers out of order. This is the debounced-search pattern again: wait 400ms after typing stops, run the check, and cancel it if a newer keystroke arrives.',
         walkthrough: [
           {
-            text: 'Mock the check with a cancellable promise.',
+            text: 'A fake check that can be cancelled.',
             code: `const TAKEN = ['admin', 'root', 'test']
 
 function checkUsernameAvailable(username: string, signal: AbortSignal): Promise<boolean> {
@@ -558,7 +609,7 @@ function checkUsernameAvailable(username: string, signal: AbortSignal): Promise<
 }`,
           },
           {
-            text: 'The effect: skip short values, start a timer, run the check when it fires, and clean up both the timer and the controller. The combined cleanup handles every case: typed again before 400ms (timer cleared), typed again during the request (aborted), unmounted (both).',
+            text: 'The effect: skip short values, start a timer, run the check when it fires, and clean up both the timer and the request. The cleanup handles every case: typed again before 400ms (timer cancelled), typed again during the request (request cancelled), left the page (both).',
             code: `const [usernameChecking, setUsernameChecking] = useState(false)
 const [usernameTaken, setUsernameTaken] = useState(false)
 
@@ -584,20 +635,21 @@ useEffect(() => {
 }, [username])`,
           },
           {
-            text: 'Fold the result into the derived errors and into `isValid`.',
+            text: 'Feed the result into the errors and into `isValid`.',
             code: `else if (touched.username && usernameTaken) errors.username = 'That username is already taken.'
 // and add \`&& !usernameTaken\` to isValid`,
           },
         ],
-        checkpoint: 'List the three situations the cleanup function handles, and what would go wrong in each without it.',
+        checkpoint: 'List the three situations the cleanup handles, and say what would go wrong in each without it.',
       },
       {
-        title: 'Make errors accessible',
+        title: 'Make errors reach screen readers',
+        summary: 'Red text is invisible to a screen reader. Three attributes fix that.',
         concept:
-          'Red text is invisible to a screen reader. Three attributes make an error real for assistive technology: `aria-invalid` flags the field, `aria-describedby` links the message to it so it is read when the field is focused, and `role="alert"` announces the message the moment it appears.',
+          'A red message under a field means nothing to someone who cannot see it. Three attributes make it real for assistive technology. `aria-invalid` flags the field as having a problem. `aria-describedby` links the message to the field so it is read when the field is focused. `role="alert"` announces the message the moment it appears.',
         walkthrough: [
           {
-            text: 'On the input, set both attributes conditionally so nothing points at a missing element.',
+            text: 'On the input, set both attributes only when there is an error, so nothing points at an element that does not exist.',
             code: `<input
   aria-invalid={!!errors.email}
   aria-describedby={errors.email ? 'fv-email-error' : undefined}
@@ -610,7 +662,7 @@ useEffect(() => {
 )}`,
           },
           {
-            text: 'Extract a `Field` wrapper so this wiring is written once and every field gets it for free.',
+            text: 'Wrap this in a small `Field` component so the wiring is written once and every field gets it.',
             code: `function Field({ label, htmlFor, error, children }) {
   return (
     <div>
@@ -622,15 +674,16 @@ useEffect(() => {
 }`,
           },
         ],
-        checkpoint: 'What does each of `aria-invalid`, `aria-describedby` and `role="alert"` do for a screen-reader user?',
+        checkpoint: 'What does each of `aria-invalid`, `aria-describedby` and `role="alert"` do for someone using a screen reader?',
       },
       {
-        title: 'Submit correctly',
+        title: 'Handle submit properly',
+        summary: 'On submit, mark every field touched and only continue if the data is really valid.',
         concept:
-          'A user can click Submit without ever blurring a field, so no errors would be showing. Submit must mark everything touched and check the real validity. Also disable the browser\'s native validation so its bubbles do not fight your messages.',
+          'A user can click Submit without ever leaving a field, so no errors would be showing. Submit must mark everything touched (so all errors appear at once) and check real validity. Also turn off the browser\'s built-in validation so its popups do not compete with your messages.',
         walkthrough: [
           {
-            text: 'Prevent default, mark all touched, proceed only if valid.',
+            text: 'Stop the page reload, mark all touched, continue only if valid.',
             code: `function handleSubmit(e: React.FormEvent) {
   e.preventDefault()
   setTouched({ username: true, email: true, password: true })
@@ -640,10 +693,10 @@ useEffect(() => {
 <form onSubmit={handleSubmit} noValidate>`,
           },
           {
-            text: 'When to reach for a library: three fields by hand is fine and transparent. Ten or more, nested objects, or validation shared with the server point toward React Hook Form plus a schema like Zod as the single source of truth.',
+            text: 'When to use a library: three fields by hand is fine and easy to follow. Ten or more fields, nested data, or rules shared with the server point toward React Hook Form plus a schema library like Zod, so the rules live in one place.',
           },
         ],
-        checkpoint: 'Why mark every field touched on submit rather than just blocking submission?',
+        checkpoint: 'Why mark every field touched on submit, rather than just refusing to submit?',
       },
     ],
   },
@@ -651,21 +704,28 @@ useEffect(() => {
   {
     challengeId: 'data-table',
     intro:
-      'A filterable, sortable table is the classic "mini admin panel" exercise. The lesson underneath is about derived state: computing the rows from the source data plus a few UI flags, rather than storing copies that can drift.',
+      'A table you can filter by typing and sort by clicking a column is the classic "mini admin panel" exercise. The real lesson is about derived state: compute the rows from the original data plus a few settings, instead of storing copies that can go out of date.',
     outcomes: [
-      'Derive filtered and sorted rows instead of storing them',
-      'Sort a copy, never the source array',
-      'Explain when useMemo matters and when it is premature',
-      'Handle empty results and the client-vs-server boundary',
+      'Compute filtered and sorted rows instead of storing them',
+      'Sort a copy, never the original array',
+      'Explain when useMemo helps and when it is unnecessary',
+      'Handle "no results" and know when to move the work to the server',
+    ],
+    terms: [
+      { term: 'Derived state', meaning: 'Values you calculate from other state during render, rather than storing separately. The sorted rows are derived from the data plus the sort settings.' },
+      { term: 'useMemo', meaning: 'A React hook that remembers the result of a calculation and only redoes it when its inputs change.' },
+      { term: 'Mutate', meaning: 'Change an array or object in place. `Array.sort` mutates; spreading into a new array does not.' },
+      { term: 'localeCompare', meaning: 'A string comparison that handles accents and case sensibly, for sorting text.' },
     ],
     steps: [
       {
-        title: 'Data and the minimal UI state',
+        title: 'The data and the three settings',
+        summary: 'The user controls three things: filter text, sort column, sort direction. Those are the state. The rows are not.',
         concept:
-          'The only things the user controls are the filter text, which column to sort by, and which direction. Those three values are the state. The rows on screen are a function of them, not state themselves.',
+          'The only things the user changes are what they typed in the filter box, which column to sort by, and which direction. Those three values are state. The rows on screen are calculated from them and from the original data. They are not state themselves.',
         walkthrough: [
           {
-            text: 'Define the row type and a static dataset.',
+            text: 'The row type and a fixed dataset.',
             code: `interface Employee { id: number; name: string; department: string; salary: number }
 
 const EMPLOYEES: Employee[] = [
@@ -675,7 +735,7 @@ const EMPLOYEES: Employee[] = [
 ]`,
           },
           {
-            text: 'Declare the three pieces of UI state. Typing `sortKey` as `keyof Employee` means the compiler stops you sorting by a column that does not exist.',
+            text: 'The three settings. Typing `sortKey` as `keyof Employee` means TypeScript stops you sorting by a column that does not exist.',
             code: `type SortKey = keyof Employee
 type SortDir = 'asc' | 'desc'
 
@@ -684,16 +744,17 @@ const [sortKey, setSortKey] = useState<SortKey>('name')
 const [sortDir, setSortDir] = useState<SortDir>('asc')`,
           },
         ],
-        pitfalls: ['Adding a `rows` state and updating it in an effect whenever filter or sort changes. It lags one render and can drift from the source.'],
-        checkpoint: 'What are the exact inputs that determine which rows appear, and why is none of the output stored in state?',
+        pitfalls: ['Adding a `rows` state and updating it in an effect whenever the settings change. It lags one render behind and can drift from the source.'],
+        checkpoint: 'What exactly decides which rows appear, and why is the list of rows not stored in state?',
       },
       {
-        title: 'Derive the rows with useMemo',
+        title: 'Calculate the rows with useMemo',
+        summary: 'Filter first, then sort a copy, and only recalculate when the inputs change.',
         concept:
-          'Filter first, then sort. Sorting must happen on a copy because `Array.prototype.sort` mutates in place, and mutating the shared dataset causes bugs anywhere else it is used. `useMemo` caches the result so unrelated re-renders do not redo O(n log n) work.',
+          'Filter first, then sort. Sorting must be done on a copy because `Array.sort` changes the array in place, and changing the shared dataset breaks anything else that uses it. `useMemo` remembers the result so unrelated re-renders do not redo the work.',
         walkthrough: [
           {
-            text: 'Filter by name or department, case-insensitively.',
+            text: 'Filter by name or department, ignoring case.',
             code: `const rows = useMemo(() => {
   const q = filter.toLowerCase()
   const filtered = EMPLOYEES.filter(
@@ -701,7 +762,7 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
   )`,
           },
           {
-            text: 'Spread into a new array before sorting. Compare numbers numerically and strings with `localeCompare` so accents and case behave. Negate the comparison for descending. List every input as a dependency.',
+            text: 'Copy into a new array before sorting. Compare numbers by subtracting and strings with `localeCompare`. Flip the result for descending. List every input as a dependency.',
             code: `  return [...filtered].sort((a, b) => {
     const av = a[sortKey]
     const bv = b[sortKey]
@@ -711,16 +772,17 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
 }, [filter, sortKey, sortDir])`,
           },
           {
-            text: 'Honesty about `useMemo`: for eight rows it changes nothing measurable. It is here to show you know that filtering and sorting re-run on every render otherwise, and that you know the tool. Say that, rather than claiming it is a performance win.',
+            text: 'Be honest about `useMemo`: with eight rows it makes no measurable difference. It is here to show you know that filtering and sorting would otherwise re-run on every render, and that you know the tool. Say that, rather than claiming it is a performance win.',
           },
         ],
-        pitfalls: ['`EMPLOYEES.sort(...)` with no copy. Interviewers check for this specifically.'],
-        checkpoint: 'What are two distinct problems caused by sorting the original array in place?',
+        pitfalls: ['Calling `EMPLOYEES.sort(...)` with no copy. Interviewers look for this specifically.'],
+        checkpoint: 'What are two separate problems caused by sorting the original array in place?',
       },
       {
-        title: 'Sortable headers',
+        title: 'Make column headers sortable',
+        summary: 'Click a new column to sort ascending. Click the current column to flip direction.',
         concept:
-          'Clicking a new column sorts it ascending. Clicking the active column flips the direction. Show the direction visually so the state is legible.',
+          'Clicking a new column sorts it ascending. Clicking the column that is already active flips the direction. Show an arrow so the current state is visible.',
         walkthrough: [
           {
             text: 'The toggle logic.',
@@ -734,7 +796,7 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
 }`,
           },
           {
-            text: 'Render headers from a column config so adding a column is one line.',
+            text: 'Render headers from a list of columns so adding one later is a single line.',
             code: `const columns: { key: SortKey; label: string }[] = [
   { key: 'name', label: 'Name' },
   { key: 'department', label: 'Department' },
@@ -752,18 +814,19 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
 </thead>`,
           },
           {
-            text: 'A `<th onClick>` is not keyboard accessible. The improvement, if asked, is to put a `<button>` inside the header and set `aria-sort` on the `<th>`.',
+            text: 'A clickable `<th>` cannot be reached with the keyboard. If asked, the fix is a `<button>` inside the header, plus `aria-sort` on the `<th>` to announce the current direction.',
           },
         ],
-        checkpoint: 'How would you make these headers usable from the keyboard, and which ARIA attribute describes the sort state?',
+        checkpoint: 'How would you make these headers work from the keyboard, and which attribute tells a screen reader the sort direction?',
       },
       {
-        title: 'Empty state and the scale boundary',
+        title: 'Handle "no results" and know when to stop',
+        summary: 'Show a message when nothing matches, and know when this must move to the server.',
         concept:
-          'Handle the no-results case, then be ready for the follow-up: what changes when the dataset is large?',
+          'Handle the empty case, then be ready for the follow-up question: what changes when there are thousands of rows?',
         walkthrough: [
           {
-            text: 'Render a single full-width row when nothing matches.',
+            text: 'One full-width row when nothing matches.',
             code: `<tbody>
   {rows.map((row) => (
     <tr key={row.id}>
@@ -780,10 +843,10 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
 </tbody>`,
           },
           {
-            text: 'Client-side filtering and sorting only work while the entire dataset is in the browser. Once you are at thousands of rows, the server must do it: the table sends filter, sortKey and sortDir as query params and receives one page. The Pagination module covers that side.',
+            text: 'Filtering and sorting in the browser only works while the whole dataset is in the browser. Once you have thousands of rows, the server must do it: the table sends the filter, column and direction as query parameters and receives one page back. The Pagination module covers that side.',
           },
         ],
-        checkpoint: 'At what point does this approach stop working, and what does the API need to accept instead?',
+        checkpoint: 'At what point does this approach stop working, and what does the server need to accept instead?',
       },
     ],
   },
@@ -791,27 +854,35 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
   {
     challengeId: 'accessible-modal',
     intro:
-      'Visually, a modal is a fixed overlay. Making it usable for keyboard and screen-reader users is where most submissions fall short. This module builds the four things that make it a real dialog: correct ARIA, focus moved in, focus trapped, and focus restored.',
+      'Visually, a modal is just a box on top of a dark overlay. Making it work for people using a keyboard or screen reader is where most submissions fall short. This module builds the four things that make it a real dialog: the right ARIA attributes, focus moved in, focus kept in, and focus put back afterwards.',
     outcomes: [
       'Apply role="dialog", aria-modal and aria-labelledby',
-      'Move focus into the dialog and restore it on close',
-      'Implement a Tab / Shift+Tab focus trap',
-      'Close on Escape and backdrop click, but not inner clicks',
+      'Move focus into the dialog and return it on close',
+      'Keep Tab and Shift+Tab inside the dialog',
+      'Close on Escape and backdrop click, but not on inner clicks',
+    ],
+    terms: [
+      { term: 'ARIA', meaning: 'A set of HTML attributes that describe what things are and how they behave, for screen readers and other assistive technology.' },
+      { term: 'Focus', meaning: 'The one element on the page that receives keyboard input. Tab moves it forward, Shift+Tab moves it back.' },
+      { term: 'Focus trap', meaning: 'Keeping focus inside the dialog: Tab from the last element wraps to the first, and Shift+Tab from the first wraps to the last.' },
+      { term: 'Backdrop', meaning: 'The dark overlay behind the dialog that covers the rest of the page.' },
+      { term: 'Event propagation', meaning: 'A click on an element also fires on its parents. `stopPropagation()` prevents that.' },
     ],
     steps: [
       {
-        title: 'State, refs, and focus restoration',
+        title: 'State, refs, and putting focus back',
+        summary: 'Remember the button that opened the dialog so you can return focus to it on close.',
         concept:
-          'You need to remember two DOM elements: the button that opened the dialog, so you can send focus back to it on close, and the dialog container, so you can find its focusable children. Restoring focus is the most frequently forgotten piece, so build it into `close()` from the start.',
+          'You need to remember two elements: the button that opened the dialog (so you can send focus back to it) and the dialog box (so you can find the buttons inside it). Returning focus is the piece people forget most often, so build it into `close()` from the start.',
         walkthrough: [
           {
-            text: 'Declare the state and both refs.',
+            text: 'The open flag and both refs.',
             code: `const [open, setOpen] = useState(false)
 const triggerRef = useRef<HTMLButtonElement | null>(null)
 const dialogRef = useRef<HTMLDivElement | null>(null)`,
           },
           {
-            text: 'Close hides the dialog and returns focus. Without this, focus falls to the document body and a keyboard user is dumped at the top of the page.',
+            text: 'Close hides the dialog and puts focus back on the trigger. Without this, focus falls to the top of the page and a keyboard user loses their place.',
             code: `function close() {
   setOpen(false)
   triggerRef.current?.focus()
@@ -820,15 +891,16 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
 <button ref={triggerRef} onClick={() => setOpen(true)}>Open dialog</button>`,
           },
         ],
-        checkpoint: 'What does a keyboard user experience on close if focus is not restored?',
+        checkpoint: 'What happens to a keyboard user on close if focus is not put back?',
       },
       {
-        title: 'Semantic markup and click handling',
+        title: 'The right markup and click behaviour',
+        summary: 'Tell screen readers this is a dialog. Backdrop click closes; inside click does not.',
         concept:
-          '`role="dialog"` tells assistive technology what this is. `aria-modal="true"` says the content behind is inert. `aria-labelledby` gives it a name from its heading. Clicking the backdrop should close; clicking inside should not, which means stopping propagation on the inner container.',
+          '`role="dialog"` tells assistive technology what this is. `aria-modal="true"` says the rest of the page is off-limits while it is open. `aria-labelledby` gives it a name from its heading. Clicking the dark backdrop should close it; clicking inside should not, which means stopping the click from bubbling up from the inner box.',
         walkthrough: [
           {
-            text: 'The backdrop is the click-to-close target. The inner container carries the ARIA and swallows its own clicks.',
+            text: 'The backdrop is the click-to-close target. The inner box carries the ARIA attributes and swallows its own clicks.',
             code: `{open && (
   <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)' }}>
     <div
@@ -847,16 +919,17 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
 )}`,
           },
         ],
-        pitfalls: ['Styling something to look like a modal without any role. To a screen reader it is just more page content.'],
-        checkpoint: 'What would happen on a click inside the dialog if `stopPropagation` were removed?',
+        pitfalls: ['Styling a box to look like a modal with no role. To a screen reader it is just more page content.'],
+        checkpoint: 'What would happen when clicking inside the dialog if `stopPropagation` were removed?',
       },
       {
         title: 'Move focus in and handle Escape',
+        summary: 'When the dialog opens, focus its first button. Escape closes it.',
         concept:
-          'When the dialog opens, focus should land inside it so keyboard users do not have to Tab through the whole page to reach it. Escape should close it. Both are done in an effect that runs when `open` becomes true and cleans up when it becomes false.',
+          'When the dialog opens, focus should land inside it so keyboard users do not have to Tab through the whole page to reach it. Escape should close it. Both live in an effect that runs when `open` becomes true and cleans up when it becomes false.',
         walkthrough: [
           {
-            text: 'Find the focusable elements with a selector that covers the common cases, and focus the first.',
+            text: 'Find the focusable elements with a selector covering the common cases, and focus the first one.',
             code: `useEffect(() => {
   if (!open) return
   const dialog = dialogRef.current
@@ -866,7 +939,7 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
   focusable?.[0]?.focus()`,
           },
           {
-            text: 'Listen on `document` so Escape works no matter what inside the dialog has focus. Remove the listener in cleanup.',
+            text: 'Listen on `document` so Escape works no matter which element inside has focus. Remove the listener in cleanup.',
             code: `  function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       close()
@@ -880,15 +953,16 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
 }, [open])`,
           },
         ],
-        checkpoint: 'Why attach the keydown listener to `document` rather than to the dialog element?',
+        checkpoint: 'Why listen for keys on `document` rather than on the dialog element?',
       },
       {
-        title: 'Trap Tab and Shift+Tab',
+        title: 'Keep Tab inside the dialog',
+        summary: 'Tab from the last button wraps to the first. Shift+Tab from the first wraps to the last.',
         concept:
-          'By default, tabbing past the last button inside the dialog moves focus to elements behind the backdrop, invisible to sighted users and disorienting for everyone else. The trap intercepts Tab at the edges and wraps focus around.',
+          'Normally, pressing Tab on the last button in the dialog moves focus to the page behind it. Sighted users cannot see where it went; everyone else is confused. The focus trap catches Tab at the edges and wraps focus around.',
         walkthrough: [
           {
-            text: 'Inside the keydown handler: on Tab from the last element, jump to the first; on Shift+Tab from the first, jump to the last. Prevent default so the browser does not also move focus.',
+            text: 'Inside the keydown handler: Tab on the last element jumps to the first; Shift+Tab on the first jumps to the last. `preventDefault()` stops the browser also moving focus.',
             code: `if (e.key === 'Tab' && focusable && focusable.length > 0) {
   const first = focusable[0]
   const last = focusable[focusable.length - 1]
@@ -902,10 +976,10 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
 }`,
           },
           {
-            text: 'Limitation to mention: the focusable list is captured once when the dialog opens. If elements inside are added or removed while it is open, the trap is stale. That is one reason production code should prefer the native `<dialog>` element with `showModal()`, which traps focus and handles Escape natively, or a tested library like focus-trap-react.',
+            text: 'A limitation worth mentioning: the list of focusable elements is captured once, when the dialog opens. If buttons are added or removed while it is open, the trap is out of date. That is one reason production code should prefer the browser\'s built-in `<dialog>` element with `showModal()`, which traps focus and handles Escape itself, or a tested library like focus-trap-react.',
           },
         ],
-        checkpoint: 'Name two things the native `<dialog>` element handles for you that this hand-rolled version does by hand.',
+        checkpoint: 'Name two things the built-in `<dialog>` element does for you that this version does by hand.',
       },
     ],
   },
@@ -913,21 +987,28 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
   {
     challengeId: 'shopping-cart',
     intro:
-      'A cart with quantities, a bulk discount and a shipping rule is a state-management exercise in disguise. The lesson: keep state tiny and derive every number from it, so the total can never be stale.',
+      'A cart with quantities, a bulk discount and a shipping rule is really a state-management exercise. The lesson: keep the stored state tiny and calculate every number from it, so the total can never be wrong.',
     outcomes: [
-      'Keep a single source of truth and derive everything else',
-      'Implement quantity changes that remove empty lines',
-      'Encode business rules explicitly and name their ambiguities',
-      'Choose a state shape and justify it',
+      'Keep one source of truth and derive everything else from it',
+      'Change quantities without leaving empty lines behind',
+      'Write business rules explicitly and point out where they are ambiguous',
+      'Choose a shape for the state and explain why',
+    ],
+    terms: [
+      { term: 'Source of truth', meaning: 'The one place a piece of information is stored. Everything else is calculated from it.' },
+      { term: 'Record', meaning: 'An object used as a lookup table, like `{ p1: 2, p3: 1 }` meaning two of product p1 and one of p3.' },
+      { term: 'Line', meaning: 'One product in the cart, with its quantity and its own subtotal.' },
+      { term: 'Immutable update', meaning: 'Making a changed copy instead of editing the original, so React notices the change.' },
     ],
     steps: [
       {
-        title: 'The smallest possible state',
+        title: 'Store as little as possible',
+        summary: 'The only state is a map of product id to quantity. Every price is calculated from it.',
         concept:
-          'The bug you see constantly in real take-homes is a `total` in state that gets updated in three different places and drifts. The fix is structural: store only `{ productId: quantity }`. Subtotal, discount, shipping and total are computed, never stored.',
+          'The bug you see constantly in take-homes is a `total` stored in state and updated in three different places, which eventually disagree. The structural fix: store only `{ productId: quantity }`. Subtotal, discount, shipping and total are calculated, never stored.',
         walkthrough: [
           {
-            text: 'Products and the business-rule constants. Naming the constants makes the rules visible and easy to change.',
+            text: 'The products and the rule numbers. Naming the numbers makes the rules visible and easy to change.',
             code: `interface Product { id: string; name: string; price: number }
 
 const PRODUCTS: Product[] = [
@@ -941,25 +1022,26 @@ const BULK_DISCOUNT_THRESHOLD = 3
 const BULK_DISCOUNT_RATE = 0.1`,
           },
           {
-            text: 'The cart is a record from id to quantity. A record gives O(1) lookup and update; an array of `{ productId, qty }` would need a `find` for every change.',
+            text: 'The cart is a record from product id to quantity. Looking up or changing one product is instant. An array of `{ productId, qty }` would need a search for every change.',
             code: `const [cart, setCart] = useState<Record<string, number>>({})`,
           },
         ],
-        checkpoint: 'Describe concretely how a stored `total` gets out of sync. Which operations would have to update it?',
+        checkpoint: 'Describe how a stored `total` ends up wrong. Which actions would all have to update it?',
       },
       {
-        title: 'Add and remove with clean-up at zero',
+        title: 'Add and remove, cleaning up at zero',
+        summary: 'Increase is simple. Decrease must delete the product when its quantity would hit zero.',
         concept:
-          'Increment is simple. Decrement has an edge: when quantity would hit zero, delete the key so no "0" row lingers. Both must copy the object before changing it, because React compares references.',
+          'Adding is simple. Removing has one edge case: when the quantity would become zero, delete the product from the record so no "0" row is left behind. Both must copy the object before changing it, because React only notices a change if it gets a new object.',
         walkthrough: [
           {
-            text: 'Add: spread, then set the id to one more than its current value, defaulting to zero.',
+            text: 'Add: copy, then set the product to one more than it was (defaulting to zero).',
             code: `function addItem(id: string) {
   setCart((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }))
 }`,
           },
           {
-            text: 'Remove: copy, then either delete or decrement.',
+            text: 'Remove: copy, then either delete the key or reduce it.',
             code: `function removeItem(id: string) {
   setCart((prev) => {
     const next = { ...prev }
@@ -970,16 +1052,17 @@ const BULK_DISCOUNT_RATE = 0.1`,
 }`,
           },
         ],
-        pitfalls: ['Mutating `prev` directly. React will not see a change and the UI will not update.'],
+        pitfalls: ['Changing `prev` directly. React sees the same object and does not re-render.'],
         checkpoint: 'Why must `removeItem` copy the object rather than deleting from `prev`?',
       },
       {
-        title: 'Derive the summary in one pass',
+        title: 'Calculate every number in one place',
+        summary: 'One useMemo turns the cart into subtotal, discount, shipping and total.',
         concept:
-          'One `useMemo` over the cart produces every number on screen. Discount is per product line, applied when that line reaches the threshold. Shipping depends on the post-discount total. Both of those are interpretations of an ambiguous spec, and saying so is part of the exercise.',
+          'One calculation over the cart produces every number on screen. The discount is per product: 10% off a line when that line has 3 or more. Shipping depends on the total after discount. Both of those are interpretations of a spec that could be read other ways, and saying so is part of the exercise.',
         walkthrough: [
           {
-            text: 'Map entries to lines with their subtotal and discount.',
+            text: 'Turn each cart entry into a line with its subtotal and discount.',
             code: `const summary = useMemo(() => {
   const lines = Object.entries(cart).map(([id, qty]) => {
     const product = PRODUCTS.find((p) => p.id === id)!
@@ -989,7 +1072,7 @@ const BULK_DISCOUNT_RATE = 0.1`,
   })`,
           },
           {
-            text: 'Reduce to totals. Shipping is free when the cart is empty (no order, no fee) or when the post-discount amount clears the threshold.',
+            text: 'Add up the totals. Shipping is free when the cart is empty (no order, no fee) or when the after-discount amount reaches the threshold.',
             code: `  const subtotal = lines.reduce((sum, l) => sum + l.lineSubtotal, 0)
   const totalDiscount = lines.reduce((sum, l) => sum + l.bulkDiscount, 0)
   const afterDiscount = subtotal - totalDiscount
@@ -999,15 +1082,16 @@ const BULK_DISCOUNT_RATE = 0.1`,
 }, [cart])`,
           },
           {
-            text: 'Verify by hand: 3 keyboards at $89 is $267. Ten percent off is $26.70, leaving $240.30, under $400, so shipping is $15 and the total is $255.30. If your numbers differ, check whether you applied the discount per line or per cart.',
+            text: 'Check by hand: 3 keyboards at $89 is $267. Ten percent off is $26.70, leaving $240.30. That is under $400, so shipping is $15 and the total is $255.30. If your number differs, check whether you applied the discount per line or across the whole cart.',
           },
         ],
-        checkpoint: '"Free shipping over $400." Before or after discount? Per-line or per-cart discount? What should you do when a spec is ambiguous like this?',
+        checkpoint: '"Free shipping over $400." Before or after the discount? Discount per product or across the cart? What should you do when a spec is unclear like this?',
       },
       {
-        title: 'Render and verify',
+        title: 'Show it and check it',
+        summary: 'Render product rows with plus and minus, then the summary block.',
         concept:
-          'The UI is a product list with quantity controls and a summary block. The minus button is disabled when the item is not in the cart. Because every figure comes from `summary`, there is no path where the display can be wrong.',
+          'The UI is a product list with quantity buttons and a summary. The minus button is disabled when the product is not in the cart. Because every figure comes from `summary`, there is no way for the display to be out of date.',
         walkthrough: [
           {
             text: 'Product rows.',
@@ -1021,14 +1105,14 @@ const BULK_DISCOUNT_RATE = 0.1`,
 ))}`,
           },
           {
-            text: 'Summary rows. Show the discount as a negative.',
+            text: 'Summary rows. Show the discount as a negative number.',
             code: `<Row label="Subtotal" value={summary.subtotal} />
 <Row label="Bulk discount" value={-summary.totalDiscount} />
 <Row label="Shipping" value={summary.shipping} />
 <Row label="Total" value={summary.total} bold />`,
           },
         ],
-        checkpoint: 'Give one advantage and one cost of storing the cart as a record keyed by id rather than an array.',
+        checkpoint: 'Give one advantage and one cost of storing the cart as a record keyed by id rather than as an array.',
       },
     ],
   },
@@ -1036,21 +1120,29 @@ const BULK_DISCOUNT_RATE = 0.1`,
   {
     challengeId: 'tabs-accordion',
     intro:
-      'Tabs and accordions are a few divs and click handlers until someone says "now make it keyboard accessible". This module builds both to the WAI-ARIA authoring patterns so you understand what headless UI libraries do under the hood.',
+      'Tabs and accordions are a few boxes and click handlers, until someone says "now make it work with a keyboard". This module builds both to the official WAI-ARIA patterns, so you understand what UI libraries do for you under the hood.',
     outcomes: [
-      'Wire tab, tablist and tabpanel roles with their relationships',
+      'Connect tabs and panels with the right roles and ids',
       'Implement roving tabindex',
       'Handle arrow, Home and End keys',
       'Build an accordion with real buttons and aria-expanded',
     ],
+    terms: [
+      { term: 'WAI-ARIA patterns', meaning: 'Official, published recipes for how common widgets (tabs, dialogs, menus) should behave for keyboard and screen-reader users.' },
+      { term: 'tabindex', meaning: 'Controls whether an element can receive keyboard focus. 0 means "in the normal Tab order", -1 means "focusable by code only".' },
+      { term: 'Roving tabindex', meaning: 'Only one item in a group is in the Tab order at a time. Arrow keys move between the rest.' },
+      { term: 'hidden attribute', meaning: 'Removes an element from both the screen and the accessibility tree, so screen readers skip it entirely.' },
+      { term: 'aria-expanded', meaning: 'Tells assistive technology whether a section controlled by this button is currently open.' },
+    ],
     steps: [
       {
-        title: 'Tab markup and ARIA relationships',
+        title: 'Tab markup and the links between tabs and panels',
+        summary: 'Each tab points at its panel, each panel points back, and hidden panels are truly hidden.',
         concept:
-          'The tabs pattern is a set of roles plus id links. The tablist contains tabs; each tab points at its panel with `aria-controls` and each panel points back with `aria-labelledby`. Inactive panels use the `hidden` attribute, which removes them from the accessibility tree, not just from view.',
+          'The tabs pattern is a set of roles plus id links. The tab list holds the tabs. Each tab names its panel with `aria-controls`, and each panel names its tab with `aria-labelledby`. Panels that are not active use the `hidden` attribute, which removes them for screen readers too, not just visually.',
         walkthrough: [
           {
-            text: 'Data and state.',
+            text: 'The data and the active index.',
             code: `const TABS = [
   { id: 'overview', label: 'Overview', content: 'High-level summary.' },
   { id: 'specs', label: 'Specs', content: 'Technical specifications.' },
@@ -1060,7 +1152,7 @@ const BULK_DISCOUNT_RATE = 0.1`,
 const [active, setActive] = useState(0)`,
           },
           {
-            text: 'The tablist and tabs. Each tab is a real `<button>` so it is focusable and activates with Enter or Space for free.',
+            text: 'The tab list and the tabs. Each tab is a real `<button>`, so it can be focused and pressed with Enter or Space with no extra work.',
             code: `<div role="tablist" aria-label="Product info">
   {TABS.map((tab, i) => (
     <button
@@ -1077,7 +1169,7 @@ const [active, setActive] = useState(0)`,
 </div>`,
           },
           {
-            text: 'Render every panel, hiding the inactive ones. Rendering all and toggling `hidden` keeps the ids stable for the ARIA links.',
+            text: 'Render every panel and hide the inactive ones. Rendering all of them keeps the ids stable for the links above.',
             code: `{TABS.map((tab, i) => (
   <div
     key={tab.id}
@@ -1091,15 +1183,16 @@ const [active, setActive] = useState(0)`,
 ))}`,
           },
         ],
-        checkpoint: 'What is the difference, for a screen reader, between `hidden` and `opacity: 0`?',
+        checkpoint: 'For a screen reader, what is the difference between `hidden` and `opacity: 0`?',
       },
       {
-        title: 'Roving tabindex',
+        title: 'Only one tab in the Tab order',
+        summary: 'Pressing Tab should jump past the whole tab list in one press.',
         concept:
-          'Pressing Tab should move past the whole tablist in one stop, the way it does with a native select. Only the active tab sits in the tab order; the rest are reachable by arrow keys. This is called roving tabindex, and it needs refs so you can focus tabs programmatically.',
+          'Pressing Tab should skip past the whole tab list in one go, like it does with a native dropdown. Only the active tab is in the Tab order; the others are reached with arrow keys. This is called roving tabindex. It needs a ref for each tab so you can focus them from code.',
         walkthrough: [
           {
-            text: 'Collect a ref per tab button.',
+            text: 'Collect a ref per tab button and set `tabIndex` based on whether it is active.',
             code: `const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
 
 <button
@@ -1109,18 +1202,19 @@ const [active, setActive] = useState(0)`,
 />`,
           },
           {
-            text: 'Try it: with all tabs at `tabIndex=0`, a keyboard user has to press Tab three times to get past the widget. With roving tabindex it is one press.',
+            text: 'Try it both ways: with every tab at `tabIndex=0`, a keyboard user presses Tab three times to get past the widget. With roving tabindex it is one press.',
           },
         ],
-        checkpoint: 'Why is having every tab in the natural Tab order a problem for keyboard users?',
+        checkpoint: 'Why is it a problem for keyboard users if every tab is in the normal Tab order?',
       },
       {
         title: 'Arrow, Home and End keys',
+        summary: 'Arrows move between tabs and wrap at the ends. Home and End jump to first and last.',
         concept:
-          'Arrow keys move both focus and selection between tabs, wrapping at the ends. Home and End jump to the first and last. Any other key must be ignored and left to the browser.',
+          'Arrow keys move both focus and selection, wrapping from last to first. Home and End jump to the ends. Every other key must be left alone for the browser to handle.',
         walkthrough: [
           {
-            text: 'Compute the next index with modulo arithmetic for wrap-around. Return early for unhandled keys, so you do not `preventDefault` on things like Tab itself.',
+            text: 'Work out the next index. The modulo (`%`) gives wrap-around. Return early for keys you do not handle, so you never block Tab or Enter.',
             code: `function handleKeyDown(e: React.KeyboardEvent) {
   let next = active
   if (e.key === 'ArrowRight') next = (active + 1) % TABS.length
@@ -1136,23 +1230,24 @@ const [active, setActive] = useState(0)`,
 <div role="tablist" onKeyDown={handleKeyDown}>`,
           },
           {
-            text: 'The `(active - 1 + TABS.length) % TABS.length` form avoids a negative result from `-1 % 3` in JavaScript.',
+            text: 'The `(active - 1 + TABS.length) % TABS.length` form is needed because in JavaScript `-1 % 3` is `-1`, not `2`.',
           },
         ],
-        pitfalls: ['Calling `preventDefault()` before the early return, which breaks Tab and Enter inside the tablist.'],
-        checkpoint: 'Why does the handler return early for unrecognised keys instead of just doing nothing?',
+        pitfalls: ['Calling `preventDefault()` before the early return. That breaks Tab and Enter inside the tab list.'],
+        checkpoint: 'Why does the handler return early for keys it does not recognise, rather than just doing nothing?',
       },
       {
-        title: 'Accordion with real buttons',
+        title: 'An accordion with real buttons',
+        summary: 'A button in a heading, aria-expanded on the button, hidden on the panel.',
         concept:
-          'The accordion is simpler: a heading containing a button, with `aria-expanded` reflecting state and `aria-controls` linking to the panel. Using a `<button>` instead of a clickable div gives focus and keyboard activation for free. This version is single-open, tracking one `openId`.',
+          'The accordion is simpler. Each section has a heading containing a button. The button has `aria-expanded` to say whether it is open and `aria-controls` to link to its panel. A `<button>` rather than a clickable div gives you focus and keyboard activation for free. This version allows one open section at a time.',
         walkthrough: [
           {
-            text: 'State is a single id or null.',
+            text: 'State is a single id, or null for all closed.',
             code: `const [openId, setOpenId] = useState<string | null>('shipping')`,
           },
           {
-            text: 'Each item: header button inside an `<h4>`, panel with `role="region"` and `hidden`.',
+            text: 'Each section: header button inside an `<h4>`, panel with `role="region"` and `hidden`.',
             code: `{ITEMS.map((item) => {
   const isOpen = openId === item.id
   return (
@@ -1180,10 +1275,10 @@ const [active, setActive] = useState(0)`,
 })}`,
           },
           {
-            text: 'To allow multiple open sections, change `openId` to a `Set<string>` and toggle membership. In production, reach for Radix or React Aria, which encode these patterns plus edge cases like RTL and focus management.',
+            text: 'To allow several open at once, change `openId` to a `Set<string>` and add or remove ids. In production, use a library like Radix or React Aria that already encodes these patterns plus edge cases you have not thought of.',
           },
         ],
-        checkpoint: 'What would you change to allow several accordion sections open at once?',
+        checkpoint: 'What would you change to allow more than one accordion section open at once?',
       },
     ],
   },
@@ -1191,21 +1286,28 @@ const [active, setActive] = useState(0)`,
   {
     challengeId: 'pagination',
     intro:
-      'Numbered pagination over a server API is one of the most common admin-list requests. It is also a vehicle for a design conversation: where should paging logic live, and how do you stop a slow page response overwriting a fast one?',
+      'Numbered pages over a server API is one of the most common admin-list requests. It is also a design conversation: where should the paging logic live, and how do you stop a slow response for page 3 overwriting the fast response for page 1?',
     outcomes: [
-      'Mock a server that returns one page plus a total',
-      'Guard against out-of-order responses with a cancelled flag',
+      'Fake a server that returns one page plus a total',
+      'Ignore out-of-date responses with a cancelled flag',
       'Show loading feedback on every page change',
-      'Compare client-side, server-side and cursor-based pagination',
+      'Compare client-side, server-side and cursor-based paging',
+    ],
+    terms: [
+      { term: 'Client-side pagination', meaning: 'Download everything once, then split it into pages in the browser.' },
+      { term: 'Server-side pagination', meaning: 'Ask the server for one page at a time. The browser never has the full list.' },
+      { term: 'Cursor-based pagination', meaning: 'Instead of page numbers, the server gives you a token that means "the next batch after this one".' },
+      { term: 'Skeleton', meaning: 'Grey placeholder rows shown while real data loads, so the layout does not jump.' },
     ],
     steps: [
       {
-        title: 'A server that only returns one page',
+        title: 'A server that returns one page at a time',
+        summary: 'Given a page number, the fake server returns just that slice plus the total count.',
         concept:
-          'Real pagination means the browser never has the full dataset. The mock must respect that: given a page number, return that slice and the total count, nothing more. The total is what lets you render numbered buttons.',
+          'Real pagination means the browser never has everything. The fake server must behave the same way: given a page number, return that slice and the total count, nothing else. The total is what lets you draw the numbered buttons.',
         walkthrough: [
           {
-            text: 'The mock API. Pages are 1-based here because that is what the UI shows.',
+            text: 'The fake API. Pages start at 1 here because that is what the UI shows.',
             code: `const PAGE_SIZE = 5
 const TOTAL_ITEMS = 43
 const ALL_ITEMS = Array.from({ length: TOTAL_ITEMS }, (_, i) => \`Order #\${1000 + i}\`)
@@ -1220,7 +1322,7 @@ function fakeFetchPage(page: number): Promise<{ items: string[]; total: number }
 }`,
           },
           {
-            text: 'State, plus a derived page count. `Math.max(1, …)` prevents a zero-page state before the first response.',
+            text: 'State, plus the page count calculated from the total. `Math.max(1, …)` avoids showing "page 1 of 0" before the first response.',
             code: `const [page, setPage] = useState(1)
 const [items, setItems] = useState<string[]>([])
 const [total, setTotal] = useState(0)
@@ -1229,15 +1331,16 @@ const [loading, setLoading] = useState(true)
 const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
           },
         ],
-        checkpoint: 'Why does the API need to return `total` when it only sends five items?',
+        checkpoint: 'Why does the server need to send `total` when it only returns five items?',
       },
       {
-        title: 'Fetch on page change with a cancelled flag',
+        title: 'Fetch when the page changes, ignoring old answers',
+        summary: 'A flag set in cleanup tells a slow, out-of-date response to throw its result away.',
         concept:
-          'Click page 3, then quickly page 1. If page 3\'s response is slower it arrives last and overwrites page 1\'s data. A local `cancelled` flag, flipped in the effect cleanup, tells the stale response to drop its result. This is a lighter alternative to AbortController when you cannot or need not cancel the underlying request.',
+          'Click page 3, then quickly page 1. If page 3\'s answer is slower, it arrives last and overwrites page 1. A local `cancelled` flag, set to true in the cleanup, tells the old response to drop its result. This is a lighter alternative to AbortController when you only need to ignore a result rather than cancel the request itself.',
         walkthrough: [
           {
-            text: 'The effect. Each run gets its own `cancelled` variable in its own closure; the cleanup for that run sets it before the next run starts.',
+            text: 'The effect. Each run has its own `cancelled` variable. The cleanup for that run sets it before the next run starts.',
             code: `useEffect(() => {
   let cancelled = false
   setLoading(true)
@@ -1253,18 +1356,19 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
 }, [page])`,
           },
           {
-            text: 'Compare with AbortController: the flag ignores the response; abort stops the request. Use abort when the request is real and cancellable (saves bandwidth). Use the flag when you only need to ignore a result, or the API has no cancel path.',
+            text: 'Compared with AbortController: the flag ignores the answer; abort stops the request. Use abort when the request is real and cancelling saves bandwidth. Use the flag when you only need to ignore a result or the API cannot be cancelled.',
           },
         ],
-        checkpoint: 'Trace the page-3-then-page-1 sequence and show where the stale write is stopped.',
+        checkpoint: 'Trace the page-3-then-page-1 sequence and show where the out-of-date result is stopped.',
       },
       {
-        title: 'Skeleton rows and page controls',
+        title: 'Placeholder rows and page buttons',
+        summary: 'Show grey rows while loading. Prev and Next are disabled at the ends.',
         concept:
-          'Loading feedback must appear on every page change, not just the first. Placeholder rows keep the layout height stable so the controls do not jump. Prev and Next are clamped and disabled at the edges.',
+          'Loading feedback must show on every page change, not just the first. Placeholder rows keep the height stable so the buttons do not jump around. Prev and Next are clamped and disabled at the edges.',
         walkthrough: [
           {
-            text: 'Render placeholders while loading.',
+            text: 'Placeholders while loading.',
             code: `<ul>
   {loading
     ? Array.from({ length: PAGE_SIZE }).map((_, i) => <li key={i} style={{ color: '#bbb' }}>Loading…</li>)
@@ -1272,7 +1376,7 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
 </ul>`,
           },
           {
-            text: 'Controls. Clamp in the handlers so a double-click cannot go out of range.',
+            text: 'The controls. Clamp inside the handlers so a fast double-click cannot go out of range.',
             code: `<button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
   <button key={p} onClick={() => setPage(p)} aria-current={p === page ? 'page' : undefined}>
@@ -1283,24 +1387,25 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
 <p>Page {page} of {totalPages}</p>`,
           },
         ],
-        checkpoint: 'Why render placeholder rows rather than an empty list while loading?',
+        checkpoint: 'Why show placeholder rows rather than an empty list while loading?',
       },
       {
         title: 'The pagination design conversation',
+        summary: 'Which approach you pick depends on how much data there is.',
         concept:
-          'Interviewers will ask which approach you would pick for a given dataset. The right answer is "it depends on the volume", followed by the trade-offs.',
+          'Interviewers will ask which approach you would pick for a given dataset. The right answer starts with "it depends on the amount of data", followed by the trade-offs.',
         walkthrough: [
           {
-            text: 'Client-side: fetch everything once, slice in the browser. Instant page switches, trivial to implement, only viable when the whole dataset is small enough to download and hold. Hundreds of rows, not millions.',
+            text: 'Client-side: download everything once, split it in the browser. Page switches are instant and the code is simple. Only works while the whole dataset is small enough to download and keep in memory. Hundreds of rows, not millions.',
           },
           {
-            text: 'Server-side numbered (this module): one round-trip per page, visible as a loading state. Required once the data cannot be shipped whole. The server must also sort and filter before paginating, since the client only ever sees a slice. Numbered buttons need truncation past a couple dozen pages.',
+            text: 'Server-side with page numbers (this module): one network round-trip per page, which the user sees as a loading state. Required once the data is too big to send whole. The server must also sort and filter before paging, because the browser only ever sees a slice. Numbered buttons need shortening ("1 2 3 … 8 9") past a couple of dozen pages.',
           },
           {
-            text: 'Cursor-based: `next` and `prev` tokens instead of page numbers. Scales for huge or frequently changing datasets and avoids skipped or duplicated rows when data shifts, but loses "jump to page 7".',
+            text: 'Cursor-based: "next" and "previous" tokens instead of page numbers. Scales to huge or constantly changing data, and avoids rows being skipped or shown twice when data moves. But you lose "jump to page 7".',
           },
         ],
-        checkpoint: 'A list has 300 rows. Which approach do you pick and why? What changes at 3 million rows, or when rows are inserted constantly?',
+        checkpoint: 'A list has 300 rows. Which approach do you pick and why? What changes at 3 million rows, or when new rows arrive constantly?',
       },
     ],
   },
@@ -1308,21 +1413,28 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
   {
     challengeId: 'drag-drop-list',
     intro:
-      'Native HTML5 drag-and-drop needs no library, but it has one famous gotcha and one structural accessibility gap. This module builds a reorderable list, handles both, and explains when you would reach for a library instead.',
+      'The browser has built-in drag-and-drop, so you need no library. But it has one famous gotcha and one built-in accessibility gap. This module builds a reorderable list, handles both, and explains when you would reach for a library instead.',
     outcomes: [
-      'Wire dragstart, dragover, drop and dragend correctly',
+      'Wire up dragstart, dragover, drop and dragend',
       'Understand why preventDefault in dragover is required',
-      'Reorder immutably with splice on a copy',
-      'Provide a keyboard path and live-region announcements',
+      'Reorder a list without changing the original array',
+      'Provide a keyboard alternative and announce changes to screen readers',
+    ],
+    terms: [
+      { term: 'HTML5 Drag and Drop', meaning: 'The browser\'s built-in drag support: mark an element `draggable` and handle a few events.' },
+      { term: 'Drop target', meaning: 'An element that accepts a dropped item. Browsers refuse drops unless you opt in with preventDefault in dragover.' },
+      { term: 'Splice', meaning: 'An array method that removes and/or inserts items at a given position.' },
+      { term: 'Live region', meaning: 'An element with `aria-live` whose text changes are read out by screen readers automatically.' },
     ],
     steps: [
       {
-        title: 'State for the list and the drag',
+        title: 'The list, and which item is being dragged',
+        summary: 'Track the items, the item being dragged, and the item the pointer is over.',
         concept:
-          'You need the list itself, which item is being dragged, and which item the pointer is currently over (for a visual drop indicator). The live region ref is for announcements later.',
+          'You need the list, which item is currently being dragged, and which item the pointer is hovering over (to draw a drop indicator). The live-region ref is for announcements later.',
         walkthrough: [
           {
-            text: 'Model and initial data.',
+            text: 'The model and starting data.',
             code: `interface Task { id: string; text: string }
 
 const INITIAL: Task[] = [
@@ -1333,22 +1445,23 @@ const INITIAL: Task[] = [
 ]`,
           },
           {
-            text: 'State and refs. `dragId` and `overId` are separate because they change at different times and drive different visuals.',
+            text: 'State and refs. `dragId` and `overId` are separate because they change at different moments and control different visuals.',
             code: `const [tasks, setTasks] = useState<Task[]>(INITIAL)
 const [dragId, setDragId] = useState<string | null>(null)
 const [overId, setOverId] = useState<string | null>(null)
 const liveRegionRef = useRef<HTMLDivElement | null>(null)`,
           },
         ],
-        checkpoint: 'What visual does `overId` drive, and why is it different from `dragId`?',
+        checkpoint: 'What does `overId` control on screen, and why is it separate from `dragId`?',
       },
       {
-        title: 'The drag handlers and the preventDefault gotcha',
+        title: 'The drag events, including the famous gotcha',
+        summary: 'You must call preventDefault in dragover, or drop silently never fires.',
         concept:
-          'By default, browsers do not allow dropping on most elements. Calling `preventDefault()` in the `dragover` handler is what opts an element in as a drop target. Forget it and `onDrop` silently never fires. This trips up almost everyone the first time.',
+          'By default, browsers do not let you drop on most elements. Calling `preventDefault()` in the `dragover` handler is what says "this element accepts drops". Forget it and `onDrop` never fires, with no error message. This catches almost everyone the first time.',
         walkthrough: [
           {
-            text: 'Record the dragged id on start. On dragover, prevent default and update `overId` only when it changes, to avoid re-rendering on every mouse move.',
+            text: 'Record the dragged id on start. On dragover, prevent default and update `overId` only when it changes, to avoid re-rendering on every pixel of mouse movement.',
             code: `function handleDragStart(id: string) {
   setDragId(id)
 }
@@ -1359,7 +1472,7 @@ function handleDragOver(e: React.DragEvent, id: string) {
 }`,
           },
           {
-            text: 'Wire them on each `<li>`, and clear state on dragend so a cancelled drag does not leave a stale highlight.',
+            text: 'Wire them on each row, and clear state on dragend so a cancelled drag does not leave a stale highlight.',
             code: `<li
   key={task.id}
   draggable
@@ -1374,16 +1487,17 @@ function handleDragOver(e: React.DragEvent, id: string) {
 >`,
           },
         ],
-        pitfalls: ['Omitting `preventDefault()` in dragover. The symptom is "drop does nothing" with no error.'],
-        checkpoint: 'What is the exact symptom when `preventDefault()` is missing from `dragover`, and why is it hard to debug?',
+        pitfalls: ['Leaving out `preventDefault()` in dragover. The symptom is "drop does nothing", with no error to help you.'],
+        checkpoint: 'What exactly happens when `preventDefault()` is missing from `dragover`, and why is it hard to debug?',
       },
       {
         title: 'Reorder on drop',
+        summary: 'Take the dragged item out of the array and put it back at the target position.',
         concept:
-          'Take the dragged item out of the array and put it back at the target\'s index. Do it on a copy so React sees a new reference. Announce the result to the live region in the same update so it reflects the final positions.',
+          'Remove the dragged item from the array and insert it at the target\'s position. Do this on a copy so React sees a new array. Write the announcement text in the same update so it reflects the final positions.',
         walkthrough: [
           {
-            text: 'Guard the no-op cases, then splice.',
+            text: 'Handle the do-nothing cases, then splice.',
             code: `function handleDrop(targetId: string) {
   if (!dragId || dragId === targetId) {
     setDragId(null)
@@ -1406,18 +1520,19 @@ function handleDragOver(e: React.DragEvent, id: string) {
 }`,
           },
           {
-            text: 'Splice-out then splice-in is O(n) per drop and easy to reason about. It handles moving up and down without index-adjustment tricks.',
+            text: 'Remove-then-insert is easy to reason about and handles moving up or down without any index adjustments.',
           },
         ],
-        checkpoint: 'Why must the reorder operate on `[...prev]` rather than `prev`?',
+        checkpoint: 'Why must the reorder work on `[...prev]` rather than on `prev` directly?',
       },
       {
-        title: 'Keyboard buttons and the live region',
+        title: 'Keyboard buttons and announcements',
+        summary: 'Built-in drag has no keyboard version, so add up/down buttons and announce each move.',
         concept:
-          'Native drag-and-drop has no keyboard equivalent at all. A drag-only reorder is inaccessible by construction, not by oversight. Up and down buttons are the actual fix. And because a visual reorder says nothing to a screen reader, an `aria-live` region announces every move.',
+          'The browser\'s drag-and-drop has no keyboard equivalent at all. A list you can only reorder by dragging is unusable for keyboard users, and no amount of ARIA fixes that. Up and down buttons are the real fix. And because a visual reorder says nothing to a screen reader, a live region announces every move.',
         walkthrough: [
           {
-            text: 'Swap with an adjacent item and announce.',
+            text: 'Swap with the neighbour and announce.',
             code: `function moveByKeyboard(id: string, direction: -1 | 1) {
   setTasks((prev) => {
     const index = prev.findIndex((t) => t.id === id)
@@ -1433,12 +1548,12 @@ function handleDragOver(e: React.DragEvent, id: string) {
 }`,
           },
           {
-            text: 'Buttons per row with descriptive labels, disabled at the ends.',
+            text: 'Buttons on each row with labels that say what they do, disabled at the ends.',
             code: `<button aria-label={\`Move \${task.text} up\`} onClick={() => moveByKeyboard(task.id, -1)} disabled={i === 0}>↑</button>
 <button aria-label={\`Move \${task.text} down\`} onClick={() => moveByKeyboard(task.id, 1)} disabled={i === tasks.length - 1}>↓</button>`,
           },
           {
-            text: 'The live region is visually hidden but present in the accessibility tree. `polite` waits for the screen reader to finish its current sentence.',
+            text: 'The live region is hidden visually but still present for screen readers. `polite` means it waits for the reader to finish its current sentence.',
             code: `<div
   ref={liveRegionRef}
   aria-live="polite"
@@ -1446,10 +1561,10 @@ function handleDragOver(e: React.DragEvent, id: string) {
 />`,
           },
           {
-            text: 'When to use a library: native DnD has an awkward `dataTransfer` API, inconsistent drag images, and no touch support. Pointer-event libraries like dnd-kit reimplement dragging from pointer events, giving touch, animation and accessibility hooks. Most production apps should use one.',
+            text: 'When to use a library: the built-in API is awkward, drag images look different across browsers, and there is no touch support. Libraries like dnd-kit rebuild dragging from pointer events, adding touch, animation and accessibility hooks. Most production apps should use one.',
           },
         ],
-        checkpoint: 'Why are the arrow buttons a requirement rather than a courtesy fallback?',
+        checkpoint: 'Why are the arrow buttons a requirement rather than a nice extra?',
       },
     ],
   },
