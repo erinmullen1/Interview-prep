@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getChallenge } from '../challenges/registry'
-import { getTest } from '../tests/content'
+import { getTest, type Question } from '../tests/content'
+import { getGeneralTest } from '../tests/general'
 import layout from './Layout.module.css'
 import styles from './Learn.module.css'
 
@@ -25,15 +26,44 @@ export function TestPage() {
   return <TestInner key={id ?? ''} id={id} />
 }
 
+interface ResolvedTest {
+  title: string
+  description: string
+  questions: Question[]
+  /** Link back to a training module, if this test belongs to a challenge. */
+  trainingId?: string
+}
+
+function resolveTest(id: string): ResolvedTest | undefined {
+  const challenge = getChallenge(id)
+  const challengeTest = getTest(id)
+  if (challenge && challengeTest) {
+    return {
+      title: challenge.title,
+      description: `${challengeTest.questions.length} questions on the approach, trade-offs and pitfalls of this challenge. Pick one answer per question, then submit to see explanations.`,
+      questions: challengeTest.questions,
+      trainingId: challenge.id,
+    }
+  }
+  const general = getGeneralTest(id)
+  if (general) {
+    return {
+      title: general.title,
+      description: `${general.description} ${general.questions.length} questions; pick one answer per question, then submit to see explanations.`,
+      questions: general.questions,
+    }
+  }
+  return undefined
+}
+
 function TestInner({ id }: { id?: string }) {
-  const challenge = id ? getChallenge(id) : undefined
-  const module = id ? getTest(id) : undefined
+  const module = id ? resolveTest(id) : undefined
 
   const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitted, setSubmitted] = useState(false)
   const [best, setBest] = useState<number | null>(() => (id ? loadBest(id) : null))
 
-  if (!challenge || !module) {
+  if (!module) {
     return (
       <div className={layout.landing}>
         <h2>Not found</h2>
@@ -68,11 +98,8 @@ function TestInner({ id }: { id?: string }) {
     <div className={styles.wrap}>
       <div className={layout.header}>
         <p className={styles.eyebrow}>Test</p>
-        <h2>{challenge.title}</h2>
-        <p>
-          {total} questions on the approach, trade-offs and pitfalls of this challenge. Pick one answer per
-          question, then submit to see explanations.
-        </p>
+        <h2>{module.title}</h2>
+        <p>{module.description}</p>
         {best !== null && <p className={styles.best}>Best score so far: {best}%</p>}
       </div>
 
@@ -132,9 +159,15 @@ function TestInner({ id }: { id?: string }) {
         })}
 
         <div className={styles.nav}>
-          <Link className={styles.btnLink} to={`/training/${challenge.id}`}>
-            ← Back to training
-          </Link>
+          {module.trainingId ? (
+            <Link className={styles.btnLink} to={`/training/${module.trainingId}`}>
+              ← Back to training
+            </Link>
+          ) : (
+            <Link className={styles.btnLink} to="/tests">
+              ← All tests
+            </Link>
+          )}
           {submitted ? (
             <button type="button" className={styles.btnPrimary} onClick={retry}>
               Retry
