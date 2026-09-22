@@ -472,6 +472,97 @@ console.log('D')`,
     ],
   },
   {
+    id: 'restful-apis',
+    title: 'RESTful APIs',
+    description: 'REST conventions, resource design, status codes in practice, and how a component should talk to an API.',
+    questions: [
+      {
+        prompt: 'What does it mean for an API to be "RESTful"?',
+        options: [
+          'It uses XML instead of JSON',
+          'It models the API as resources (nouns) manipulated with a fixed set of HTTP methods (verbs), addressed by URLs, and each request contains everything needed to handle it',
+          'It requires a GraphQL schema',
+          'It only supports GET requests',
+        ],
+        answer: 1,
+        explanation:
+          'REST (Representational State Transfer) is a style, not a protocol. The core ideas are: resources have URLs, HTTP methods express the action, requests are stateless (no server-side session between calls), and responses represent the resource\'s current state.',
+      },
+      {
+        prompt: 'Which URL design best follows REST conventions for fetching a single order?',
+        options: [
+          '/getOrder?id=42',
+          '/orders/42',
+          '/api/order/fetch/42',
+          '/order_fetch_by_id_42',
+        ],
+        answer: 1,
+        explanation:
+          'REST URLs name resources (nouns), not actions. `/orders/42` is "the order with id 42". `/getOrder?id=42` bakes the verb into the URL, which is what the HTTP method is already for.',
+      },
+      {
+        prompt: 'A client POSTs a new order to `/orders`. What should a well-designed API return?',
+        options: [
+          '200 OK with an empty body',
+          '201 Created, with the new resource (including its id) in the body and a Location header pointing at it',
+          '204 No Content',
+          '302 redirect to the homepage',
+        ],
+        answer: 1,
+        explanation:
+          '201 signals "a new resource was created". Returning the created object saves the client an extra GET, and it now has the server-assigned id to use for further requests.',
+      },
+      {
+        prompt: 'What is the difference between PUT and PATCH on `/orders/42`?',
+        options: [
+          'They are identical in REST',
+          'PUT replaces the entire order with the given representation; PATCH applies a partial update, changing only the fields sent',
+          'PUT is for creating, PATCH is for deleting',
+          'PATCH is idempotent and PUT is not',
+        ],
+        answer: 1,
+        explanation:
+          'Sending `{ status: "shipped" }` as a PUT would, strictly, wipe out every other field not included. PATCH is built for exactly this partial-update case. Both are idempotent: repeating either leaves the resource in the same state.',
+      },
+      {
+        prompt: 'A component fetches `/orders/42` and the order does not exist. What should the API return, and how should the component treat it?',
+        options: [
+          '200 OK with `null` in the body; the component checks if the body is null',
+          '404 Not Found; the component checks `response.ok` or the status before treating the response as an error',
+          '500 Internal Server Error, because any lookup failure is a server problem',
+          'The connection should be closed with no response',
+        ],
+        answer: 1,
+        explanation:
+          '404 is the correct, cacheable, standard way to say "no such resource". `fetch` does not throw for a 404, so the component must check `response.ok` (or `response.status`) itself before parsing the body as data.',
+      },
+      {
+        prompt: 'Why is pagination usually implemented with query parameters rather than as part of the resource path?',
+        options: [
+          'Query parameters are faster to parse',
+          'Pagination is a way of viewing a collection resource, not a different resource, so it belongs in `?page=2&limit=20` on `/orders`, not in the path',
+          'The path can only contain one segment',
+          'It is required by the HTTP specification',
+        ],
+        answer: 1,
+        explanation:
+          '`/orders?page=2&limit=20` is still "the orders collection", just filtered to one page. Putting page numbers in the path (`/orders/page/2`) implies they are separate resources, which they are not.',
+      },
+      {
+        prompt: 'What is a practical downside of REST that GraphQL is often chosen to address?',
+        options: [
+          'REST cannot use HTTPS',
+          'A screen that needs data from several related resources (a user, their orders, and each order\'s items) may need several REST requests or a custom endpoint, while GraphQL can fetch exactly that shape in one request',
+          'REST APIs cannot return JSON',
+          'REST does not support authentication',
+        ],
+        answer: 1,
+        explanation:
+          'This is "over-fetching and under-fetching": a REST resource returns a fixed shape, so a screen with unusual data needs often ends up calling multiple endpoints or getting more fields than it needs. It is a trade-off, not a flaw; REST\'s simplicity and cacheability are real advantages GraphQL gives up.',
+      },
+    ],
+  },
+  {
     id: 'react-fundamentals',
     title: 'React Fundamentals',
     description: 'Rendering, state, keys, effects and the mental model behind the hooks used throughout the challenges.',

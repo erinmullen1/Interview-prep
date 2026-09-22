@@ -5,6 +5,7 @@ import { getTest, type Question } from '../tests/content'
 import { getGeneralTest } from '../tests/general'
 import layout from './Layout.module.css'
 import styles from './Learn.module.css'
+import { Prose } from './Prose'
 
 function bestKey(id: string) {
   return `test-best:${id}`
@@ -121,7 +122,7 @@ function TestInner({ id }: { id?: string }) {
             <fieldset key={q.prompt} className={styles.question} style={{ border: 'none', padding: 0, margin: '0 0 22px' }}>
               <legend style={{ padding: 0 }}>
                 <p>
-                  {qi + 1}. {q.prompt}
+                  {qi + 1}. <Prose text={q.prompt} />
                 </p>
               </legend>
               {q.code && (
@@ -144,14 +145,16 @@ function TestInner({ id }: { id?: string }) {
                       disabled={submitted}
                       onChange={() => setAnswers((prev) => ({ ...prev, [qi]: oi }))}
                     />
-                    <span>{opt}</span>
+                    <span>
+                      <Prose text={opt} />
+                    </span>
                   </label>
                 )
               })}
               {submitted && (
                 <p className={styles.explanation}>
                   {chosen === q.answer ? '✓ Correct. ' : '✗ '}
-                  {q.explanation}
+                  <Prose text={q.explanation} />
                 </p>
               )}
             </fieldset>

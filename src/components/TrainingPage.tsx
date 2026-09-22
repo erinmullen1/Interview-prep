@@ -5,18 +5,7 @@ import { getTraining, type KeyTerm, type TrainingStep } from '../training/conten
 import { getGeneralTraining } from '../training/general'
 import layout from './Layout.module.css'
 import styles from './Learn.module.css'
-
-/** Renders `backticked` spans in prose as inline <code>. */
-function Prose({ text }: { text: string }) {
-  const parts = text.split(/(`[^`]+`)/g)
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.startsWith('`') && part.endsWith('`') ? <code key={i}>{part.slice(1, -1)}</code> : <span key={i}>{part}</span>,
-      )}
-    </>
-  )
-}
+import { Prose } from './Prose'
 
 function storageKey(id: string) {
   return `training:${id}`

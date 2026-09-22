@@ -869,6 +869,240 @@ STRIPE_SECRET_KEY=...      // never prefix this; keep it server-side`,
   },
   // ---------------------------------------------------------------------------
   {
+    id: 'restful-apis',
+    title: 'RESTful APIs',
+    intro:
+      'REST is the convention behind most APIs you will call from a frontend: resources have URLs, HTTP methods express the action, and status codes report the outcome. This module covers the design rules, then builds a real component that talks to a REST API the right way, including the loading, error and cancellation handling the earlier modules taught.',
+    outcomes: [
+      'Design resource URLs that follow REST conventions',
+      'Pick the right method and status code for create, read, update and delete',
+      'Write a component that fetches, creates and updates a resource correctly',
+      'Explain REST\'s trade-offs against GraphQL',
+    ],
+    terms: [
+      { term: 'Resource', meaning: 'A thing the API exposes, named by a noun: a user, an order, a list of orders. REST URLs identify resources, not actions.' },
+      { term: 'Endpoint', meaning: 'A specific URL plus method, like "GET /orders/42" or "POST /orders".' },
+      { term: 'Idempotent', meaning: 'Doing it twice has the same effect as doing it once. GET, PUT and DELETE are; POST usually is not.' },
+      { term: 'Statelessness', meaning: 'Each request carries everything the server needs (auth, data) rather than relying on the server remembering previous requests.' },
+      { term: 'Payload', meaning: 'The body of a request or response, usually JSON, containing the resource\'s data.' },
+    ],
+    steps: [
+      {
+        title: 'Resources, not actions',
+        summary: 'URLs name things (nouns). HTTP methods say what to do to them (verbs).',
+        concept:
+          'REST models an API as a set of resources, each with its own URL, manipulated with a small, fixed set of HTTP methods. The URL should read like a noun phrase: "the orders", "order 42", "order 42\'s items". The verb belongs in the method, not the URL. This single rule is what most REST API critiques and corrections come back to.',
+        walkthrough: [
+          {
+            text: 'Compare a REST-shaped API with an action-shaped one that a beginner might write instead.',
+            code: `// action-shaped (not REST)
+GET  /getOrder?id=42
+POST /createOrder
+POST /deleteOrder?id=42
+POST /updateOrderStatus?id=42&status=shipped
+
+// resource-shaped (REST)
+GET    /orders/42
+POST   /orders
+DELETE /orders/42
+PATCH  /orders/42     body: { status: 'shipped' }`,
+          },
+          {
+            text: 'A collection and one item of it are two different resources, nested naturally in the path.',
+            code: `GET  /orders            // the collection: all orders
+GET  /orders/42         // one order
+GET  /orders/42/items   // the items belonging to order 42
+GET  /orders/42/items/7 // one item of that order`,
+          },
+          {
+            text: 'Filtering, sorting and pagination are ways of viewing a collection, so they belong in the query string, not the path. This is the same idea the Pagination and Data Table challenges use.',
+            code: `GET /orders?status=shipped&sort=-createdAt&page=2&limit=20`,
+          },
+        ],
+        pitfalls: ['Putting a verb in the URL, like `/orders/42/cancel`. Prefer `PATCH /orders/42` with `{ status: "cancelled" }`, though an action endpoint is sometimes reasonable for something that is not a field update, like `/orders/42/refund`.'],
+        checkpoint: 'Design the URLs for: listing a user\'s comments, adding a comment, and deleting one specific comment.',
+      },
+      {
+        title: 'Methods and status codes in practice',
+        summary: 'GET reads, POST creates, PUT replaces, PATCH edits part, DELETE removes. The status code reports which of those happened.',
+        concept:
+          'Each method has an expected meaning, and picking the right one is what makes the API predictable to anyone calling it, including browsers and caches. The status code is not decoration: `response.ok` and error handling in the client depend on it being accurate.',
+        walkthrough: [
+          {
+            text: 'Reading. GET must never change anything on the server, which is what lets browsers and CDNs cache and prefetch GET requests safely.',
+            code: `GET /orders/42
+→ 200 OK
+{ "id": 42, "status": "pending", "total": 89.00 }
+
+GET /orders/999
+→ 404 Not Found
+{ "error": "Order 999 does not exist" }`,
+          },
+          {
+            text: 'Creating. 201 says "made", and the response carries the new resource, including the id the server assigned.',
+            code: `POST /orders
+body: { "items": [{ "sku": "kb-1", "qty": 1 }] }
+→ 201 Created
+Location: /orders/43
+{ "id": 43, "status": "pending", "items": [...], "total": 89.00 }`,
+          },
+          {
+            text: 'Replacing vs. editing. PUT sends the whole resource; PATCH sends only what changed.',
+            code: `PUT /orders/42
+body: { "status": "shipped", "items": [...], "total": 89.00 }  // the whole thing
+→ 200 OK
+
+PATCH /orders/42
+body: { "status": "shipped" }  // just this field
+→ 200 OK`,
+          },
+          {
+            text: 'Deleting. 204 means "done, nothing to send back".',
+            code: `DELETE /orders/42
+→ 204 No Content`,
+          },
+          {
+            text: 'A validation failure is a 400-range error with enough detail to show the user, not a 500.',
+            code: `POST /orders
+body: { "items": [] }
+→ 400 Bad Request
+{ "error": "items must contain at least one item" }`,
+          },
+        ],
+        pitfalls: ['Returning 200 for every response, including failures, with the real result hidden inside the JSON body. This defeats `response.ok`, caching, and anyone skimming the network tab.'],
+        checkpoint: 'A PATCH to update one field returns the entire updated order, not just that field. Is that a REST violation? Why might an API do this anyway?',
+      },
+      {
+        title: 'A component that fetches a resource',
+        summary: 'Fetch on mount, handle loading and error state, and treat a non-2xx response as an error explicitly.',
+        concept:
+          'Calling a REST endpoint from a component is the same shape every time: start loading, request, check whether it succeeded, then store either the data or the error. `fetch` only rejects on a genuine network failure, so a 404 or 500 has to be checked deliberately, exactly as the HTTP & Networking module covers.',
+        walkthrough: [
+          {
+            text: 'The three states a data-fetching component needs, same as the debounced-search and pagination challenges.',
+            code: `import { useEffect, useState } from 'react'
+
+interface Order {
+  id: number
+  status: 'pending' | 'shipped' | 'cancelled'
+  total: number
+}
+
+function OrderDetail({ orderId }: { orderId: number }) {
+  const [order, setOrder] = useState<Order | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)`,
+          },
+          {
+            text: 'Fetch on mount (and whenever `orderId` changes). Check `response.ok` before trusting the body. Cancel with AbortController if the component unmounts or the id changes mid-request, the same pattern as the debounced-search module.',
+            code: `  useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
+
+    fetch(\`/api/orders/\${orderId}\`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(\`Order not found (\${res.status})\`)
+        return res.json()
+      })
+      .then((data: Order) => setOrder(data))
+      .catch((err) => {
+        if (err.name !== 'AbortError') setError(err.message)
+      })
+      .finally(() => setLoading(false))
+
+    return () => controller.abort()
+  }, [orderId])`,
+          },
+          {
+            text: 'Render all three states. This is the same rule the earlier async modules used: loading, data, and "something went wrong" must all be visible outcomes, never left implicit.',
+            code: `  if (loading) return <p>Loading order…</p>
+  if (error) return <p role="alert">Could not load order: {error}</p>
+  if (!order) return null
+
+  return (
+    <div>
+      <h3>Order #{order.id}</h3>
+      <p>Status: {order.status}</p>
+      <p>Total: \${order.total.toFixed(2)}</p>
+    </div>
+  )
+}`,
+          },
+        ],
+        pitfalls: ['Parsing `res.json()` before checking `res.ok`. An error response is often JSON too, so this "succeeds" and quietly stores an error object as if it were the order.'],
+        checkpoint: 'Why does the effect check `err.name !== "AbortError"` before setting the error state?',
+      },
+      {
+        title: 'Creating and updating from a component',
+        summary: 'POST to create, PATCH to update, and reflect the server\'s response back into state rather than assuming the request worked.',
+        concept:
+          'Writes follow the optimistic-update pattern the Optimistic Todo module built: show the attempt immediately if it improves the experience, but the source of truth after a write is the server\'s response, not what the client assumed would happen. Sending the wrong method or forgetting a content-type header are the two most common mistakes here.',
+        walkthrough: [
+          {
+            text: 'Creating a resource. The `Content-Type` header is what tells the server to parse the body as JSON; a surprising number of "the API doesn\'t work" bugs are a missing header.',
+            code: `async function createOrder(items: { sku: string; qty: number }[]): Promise<Order> {
+  const res = await fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })
+  if (!res.ok) throw new Error(\`Failed to create order (\${res.status})\`)
+  return res.json() // the server's version, including its assigned id
+}`,
+          },
+          {
+            text: 'Updating a resource with PATCH. Only the changed field is sent, matching what PATCH means.',
+            code: `async function updateStatus(orderId: number, status: Order['status']): Promise<Order> {
+  const res = await fetch(\`/api/orders/\${orderId}\`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!res.ok) throw new Error(\`Failed to update order (\${res.status})\`)
+  return res.json()
+}`,
+          },
+          {
+            text: 'Wiring one into a component, following the same status-per-row pattern as the Optimistic Todo challenge: show the attempt, then reconcile with what the server actually returned.',
+            code: `function CancelButton({ order, onUpdated }: { order: Order; onUpdated: (o: Order) => void }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCancel() {
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await updateStatus(order.id, 'cancelled')
+      onUpdated(updated) // trust the server's response, not a local guess
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <button onClick={handleCancel} disabled={saving || order.status === 'cancelled'}>
+        {saving ? 'Cancelling…' : 'Cancel order'}
+      </button>
+      {error && <p role="alert">{error}</p>}
+    </div>
+  )
+}`,
+          },
+        ],
+        pitfalls: [
+          'Forgetting `Content-Type: application/json`, which leaves many servers unable to parse the body at all.',
+          'Updating local state to the "expected" result instead of the server\'s actual response, which drifts if the server applies extra logic (like recalculating a total).',
+        ],
+        checkpoint: 'Why does `handleCancel` call `onUpdated(updated)` with the server\'s response instead of just setting `order.status = "cancelled"` locally?',
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------------
+  {
     id: 'react-fundamentals',
     title: 'React Fundamentals',
     intro:
