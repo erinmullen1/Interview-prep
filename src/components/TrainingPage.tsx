@@ -57,6 +57,7 @@ function TrainingInner({ id }: { id?: string }) {
     const firstIncomplete = module.steps.findIndex((_, i) => !done.includes(i))
     return firstIncomplete === -1 ? 0 : firstIncomplete
   })
+  const [showAnswer, setShowAnswer] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -67,9 +68,10 @@ function TrainingInner({ id }: { id?: string }) {
     }
   }, [id, done])
 
-  // Scroll to the top of the lesson when the step changes.
+  // Scroll to the top of the lesson, and hide the previous lesson's answer, when the step changes.
   useEffect(() => {
     document.querySelector('main')?.scrollTo({ top: 0 })
+    setShowAnswer(false)
   }, [current])
 
   if (!id || !module) {
@@ -213,6 +215,14 @@ function TrainingInner({ id }: { id?: string }) {
         <p className={styles.checkpoint}>
           <Prose text={step.checkpoint} />
         </p>
+        <button type="button" className={styles.reveal} onClick={() => setShowAnswer((v) => !v)} aria-expanded={showAnswer}>
+          {showAnswer ? 'Hide answer' : 'Reveal answer'}
+        </button>
+        {showAnswer && (
+          <p className={styles.answer}>
+            <Prose text={step.checkpointAnswer} />
+          </p>
+        )}
 
         <div className={styles.nav}>
           <button type="button" className={styles.btn} disabled={current === 0} onClick={() => setCurrent(current - 1)}>

@@ -17,6 +17,8 @@ export interface TrainingStep {
   pitfalls?: string[]
   /** A question to answer in your own words before moving on. */
   checkpoint: string
+  /** A model answer, revealed on demand after attempting the checkpoint. */
+  checkpointAnswer: string
 }
 
 export interface KeyTerm {
@@ -108,6 +110,8 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
           'Leaving out the label. An unlabelled input is an accessibility failure interviewers spot straight away.',
         ],
         checkpoint: 'In your own words: what is a controlled input, and why do we want one here?',
+        checkpointAnswer:
+          'A controlled input is one whose displayed value comes from React state (`value={input}`) rather than being read from the DOM when needed. We want one here so that other pieces of the component, like the debounce timer in the next step, can react to every keystroke through normal state updates, instead of polling the DOM or wiring up a separate event listener.',
       },
       {
         title: 'Wait for the user to pause (debounce)',
@@ -135,6 +139,8 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
           'Forgetting the cleanup. Then every keystroke eventually fires its own timer and you are back to one search per key.',
         ],
         checkpoint: 'A user types three letters within 300ms. How many times does `setDebounced` run, and why?',
+        checkpointAnswer:
+          'Once. Each keystroke re-runs the effect, and before it runs again React calls the previous cleanup, which clears the still-pending timer from the last keystroke. Only the timer started by the final keystroke ever survives long enough to fire, so `setDebounced` is called exactly once, with the text as it stood after that last keystroke.',
       },
       {
         title: 'Search, and cancel searches that are out of date',
@@ -178,6 +184,8 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
           'Not cleaning up on unmount. You get a React warning about updating state on a component that no longer exists.',
         ],
         checkpoint: 'Walk through the "re" then "react" example without cancellation, then with it. At what exact line does the stale result get stopped?',
+        checkpointAnswer:
+          'Without cancellation: the "re" request is slow and the "react" request is fast, so "react" results render first, then the "re" response arrives later and overwrites them with the wrong, broader list. With cancellation: when the "react" effect starts, `abortRef.current?.abort()` fires on the still-pending "re" controller first, so when the "re" promise eventually settles, its `catch` sees an `AbortError` and does nothing rather than calling `setResults`. The stale write is stopped by the abort call itself, not by any check on the data.',
       },
       {
         title: 'Show loading, results, and "no matches"',
@@ -203,6 +211,8 @@ function fakeSearchApi(query: string, signal: AbortSignal): Promise<string[]> {
           },
         ],
         checkpoint: 'Why does the "No matches" check use `debounced` instead of `input`?',
+        checkpointAnswer:
+          '`results` is always in sync with `debounced`, since that is what the fetch effect searched for. `input` can be ahead of it by up to 300ms while the user is still typing. Checking `input` would show "No matches" for a query that has not actually been searched yet, which is misleading; checking `debounced` guarantees the message only appears once a real search for that exact text has come back empty.',
       },
       {
         title: 'Review, then tidy up',
@@ -232,6 +242,8 @@ const debounced = useDebouncedValue(input, 300)`,
           },
         ],
         checkpoint: 'Give one situation where throttling is the better choice, and one where debouncing is.',
+        checkpointAnswer:
+          'Throttling suits a continuous stream you want to sample at a steady rate, such as updating a "scroll progress" indicator or a drag handle: you want regular updates throughout the gesture, not just at the end. Debouncing suits actions that should only happen once the user has settled, like this search box or autosaving a document: there is no value in acting on a half-typed word or a mid-edit sentence.',
       },
     ],
   },
@@ -284,6 +296,8 @@ const [loading, setLoading] = useState(false)`,
           },
         ],
         checkpoint: 'Why can the browser not work out on its own whether more pages exist?',
+        checkpointAnswer:
+          'The browser only ever receives one page at a time and has no way to know the size of the full dataset on the server just from that slice. The server is the only side that knows the true total, so it must say so explicitly, either as a `hasMore` boolean or a total count, and the client must trust and store that signal.',
       },
       {
         title: 'Write the function that loads the next page',
@@ -313,6 +327,8 @@ const [loading, setLoading] = useState(false)`,
         ],
         pitfalls: ['Using `items` directly inside the promise callback. This stale-closure bug is the number one infinite-scroll mistake.'],
         checkpoint: 'What could go wrong if `loadNext` used `setItems([...items, ...newItems])`?',
+        checkpointAnswer:
+          '`loadNext` is wrapped in `useCallback` with `[page]` as its only dependency, so the function is only recreated when `page` changes, not on every render. The `items` it would close over is whatever value existed the last time the function was created, which can be out of date by the time the promise resolves. If two pages load close together, the second call could overwrite the first page\'s items instead of appending to them, silently dropping data.',
       },
       {
         title: 'Watch a marker at the bottom of the list',
@@ -351,6 +367,8 @@ const [loading, setLoading] = useState(false)`,
           'Not disconnecting. Each re-run would leave another observer running.',
         ],
         checkpoint: 'What does `rootMargin` change about when the callback fires, and why is that helpful?',
+        checkpointAnswer:
+          'By default, the observer fires only once the sentinel actually enters the visible viewport. `rootMargin: "200px"` grows the detection area by 200px on every side, so the callback fires while the sentinel is still 200px below the visible area, before the user has actually scrolled to it. That head start means the next page usually finishes loading before the user reaches the bottom, avoiding a visible gap of empty space.',
       },
       {
         title: 'Finish the UI and know the trade-offs',
@@ -373,6 +391,8 @@ const [loading, setLoading] = useState(false)`,
           },
         ],
         checkpoint: 'Name one accessibility problem with infinite scroll and one practical way to reduce it.',
+        checkpointAnswer:
+          'A keyboard or screen-reader user can get trapped scrolling through an ever-growing page with no way to reach the footer or any content below the feed, since new items keep appearing before they get there. A practical mitigation is to pair the infinite-scroll behaviour with a visible, focusable "Load more" button that does the same thing on click, giving keyboard users an explicit, boundable action instead of relying on the scroll gesture alone.',
       },
     ],
   },
@@ -427,6 +447,8 @@ const [text, setText] = useState('')`,
           },
         ],
         checkpoint: 'Why is a fake server that always succeeds risky for this feature?',
+        checkpointAnswer:
+          'The entire point of an optimistic UI is that it has a correct rollback path for when the server rejects the change. If the mock API never fails, the rollback code is never actually exercised during development, so a bug in it (wrong item reverted, lost text, a stuck "saving" state) would only surface in production against a real, unreliable network, which is the worst place to discover it.',
       },
       {
         title: 'Add a todo optimistically, keep it on failure',
@@ -454,6 +476,8 @@ function addTodo() {
         ],
         pitfalls: ['Removing the item on failure. Interviewers will ask what happened to the text the user typed.'],
         checkpoint: 'Why is "mark as error" the right rollback for adding, rather than "remove the row"?',
+        checkpointAnswer:
+          'The row represents text the user typed themselves. Silently deleting it on failure throws that effort away with no way to recover it, and the user may not even notice it vanished. Marking it as an error keeps the text visible and gives the user a Retry button, so nothing is lost and they stay in control of what happens next.',
       },
       {
         title: 'Toggle "done" optimistically, revert on failure',
@@ -477,6 +501,8 @@ function addTodo() {
         ],
         pitfalls: ['Taking the snapshot inside the functional updater. It must be captured before the optimistic write, as a plain variable.'],
         checkpoint: 'Describe two toggles in a row where restoring the whole snapshot gives the wrong result.',
+        checkpointAnswer:
+          'Toggle item A: `previous` captures the list with A still unchecked. Before A\'s save resolves, toggle item B: B optimistically flips too. If A\'s save then fails, `setTodos(previous)` restores the list from before A was toggled, which also reverts B back to its old state, even though B\'s own save may well have already succeeded. The fix is to restore only the one field that failed rather than the whole list.',
       },
       {
         title: 'Retry, show status per row, and know the limits',
@@ -512,6 +538,8 @@ function addTodo() {
           },
         ],
         checkpoint: 'Name a feature where an optimistic update would be harmful, and say why.',
+        checkpointAnswer:
+          'A payment or checkout confirmation. Showing "Payment successful" before the payment processor has actually confirmed the charge risks the user believing money has moved (or a purchase has gone through) when it has not, which is a much worse outcome than a short wait. Anywhere a false positive could cause real-world harm or confusion is a case for a pessimistic update: wait for confirmation, then show the result.',
       },
     ],
   },
@@ -558,6 +586,8 @@ const [touched, setTouched] = useState<Record<string, boolean>>({})`,
           },
         ],
         checkpoint: 'Compare checking on every keystroke, checking on blur, and checking only on submit. What annoys users about each one alone?',
+        checkpointAnswer:
+          'On-change alone shows "too short" while the user is still mid-word, which feels like the form is nagging before they have finished. On-submit alone hides every problem until the very end, so a user can fill in a whole form only to be told everything is wrong at once. On-blur alone (with no live update afterwards) is closer to right, but if used in isolation it means an error can linger uncorrected even after the user has fixed it, since nothing re-checks until they blur again. The pattern used here, blur first then live after that, avoids all three annoyances.',
       },
       {
         title: 'Work out errors during render',
@@ -587,6 +617,8 @@ if (touched.password && password.length < 8) errors.password = 'Password must be
         ],
         pitfalls: ['Keeping `errors` in state and updating it in an effect. Compute it instead.'],
         checkpoint: 'Why must `isValid` ignore `touched` while `errors` uses it?',
+        checkpointAnswer:
+          '`errors` is about what to display, and only touched fields should show a message so the user is not confronted with red text before they have interacted with anything. `isValid` is about whether the data is actually acceptable to submit, which has nothing to do with what the user has clicked into yet. If `isValid` respected `touched`, a completely untouched, empty form would count as valid simply because no field had been visited, letting a user submit with a blank form.',
       },
       {
         title: 'Check the username with the server',
@@ -641,6 +673,8 @@ useEffect(() => {
           },
         ],
         checkpoint: 'List the three situations the cleanup handles, and say what would go wrong in each without it.',
+        checkpointAnswer:
+          '1) The user types another character before 400ms elapse: without clearing the timer, the old, now-outdated check would still fire later alongside the new one. 2) The user types again while the check is already in flight: without aborting, the stale request could resolve after the newer one and overwrite `usernameTaken` with an answer for a username the user is no longer looking at. 3) The component unmounts (or the field changes) mid-check: without cleanup, the promise resolving later would call `setUsernameTaken` on an unmounted component, which React warns about.',
       },
       {
         title: 'Make errors reach screen readers',
@@ -675,6 +709,8 @@ useEffect(() => {
           },
         ],
         checkpoint: 'What does each of `aria-invalid`, `aria-describedby` and `role="alert"` do for someone using a screen reader?',
+        checkpointAnswer:
+          '`aria-invalid="true"` marks the field itself as currently having a problem, which many screen readers announce when the field is focused. `aria-describedby` points at the id of the error message, so that message is read out as additional description whenever the field receives focus, not just the label. `role="alert"` makes the browser treat the element as a live region, so the moment the error text appears in the DOM it is announced immediately, without the user needing to move focus to it at all.',
       },
       {
         title: 'Handle submit properly',
@@ -697,6 +733,8 @@ useEffect(() => {
           },
         ],
         checkpoint: 'Why mark every field touched on submit, rather than just refusing to submit?',
+        checkpointAnswer:
+          'If submit just silently refused to proceed, a user who never blurred any field would see no errors anywhere and have no idea why the button is not working. Marking every field touched forces all the relevant error messages to render at once, so the user can immediately see exactly what needs fixing instead of guessing or clicking around the form to find out.',
       },
     ],
   },
@@ -746,6 +784,8 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
         ],
         pitfalls: ['Adding a `rows` state and updating it in an effect whenever the settings change. It lags one render behind and can drift from the source.'],
         checkpoint: 'What exactly decides which rows appear, and why is the list of rows not stored in state?',
+        checkpointAnswer:
+          'The rows shown are entirely determined by three things: the raw `EMPLOYEES` data, the current `filter` text, and the current `sortKey`/`sortDir`. They are not stored in their own state because that would create a second copy of information that already exists elsewhere, which can drift out of sync (for example if you forget to re-filter after a sort change). Deriving them fresh each render, optionally cached with `useMemo`, guarantees they are always correct for the current filter and sort settings.',
       },
       {
         title: 'Calculate the rows with useMemo',
@@ -777,6 +817,8 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
         ],
         pitfalls: ['Calling `EMPLOYEES.sort(...)` with no copy. Interviewers look for this specifically.'],
         checkpoint: 'What are two separate problems caused by sorting the original array in place?',
+        checkpointAnswer:
+          'First, any other part of the app that reads `EMPLOYEES` expecting its original order will silently see a different order than it started with, which is a hard bug to trace back to a sort call elsewhere. Second, since `.sort()` returns the same array reference it mutated, code that compares old and new array references to decide whether to re-render (as React and `useMemo` do) may not detect that anything changed, even though the contents did.',
       },
       {
         title: 'Make column headers sortable',
@@ -818,6 +860,8 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
           },
         ],
         checkpoint: 'How would you make these headers work from the keyboard, and which attribute tells a screen reader the sort direction?',
+        checkpointAnswer:
+          'Put a real `<button>` inside each `<th>` and move the `onClick` (and the sort logic) onto that button, since a `<th>` itself is not focusable or activatable by keyboard. The `aria-sort` attribute on the `<th>` (values `"ascending"`, `"descending"`, or `"none"`) tells a screen reader the current sort state of that column without relying on a visual arrow.',
       },
       {
         title: 'Handle "no results" and know when to stop',
@@ -847,6 +891,8 @@ const [sortDir, setSortDir] = useState<SortDir>('asc')`,
           },
         ],
         checkpoint: 'At what point does this approach stop working, and what does the server need to accept instead?',
+        checkpointAnswer:
+          'It stops working once the full dataset is too large to reasonably download into the browser, typically somewhere in the thousands-of-rows range depending on row size and network conditions. Past that point, the server needs to accept the filter text, sort column and sort direction as query parameters (for example `?filter=eng&sortKey=salary&sortDir=desc&page=2`) and return only the matching, already-sorted page of rows, the same approach the Pagination module covers for a plain list.',
       },
     ],
   },
@@ -892,6 +938,8 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
           },
         ],
         checkpoint: 'What happens to a keyboard user on close if focus is not put back?',
+        checkpointAnswer:
+          'When the dialog closes and is removed from the DOM, the browser has to put focus somewhere, and by default that is usually the `<body>` element. The keyboard user loses their place entirely: instead of continuing from the button they clicked, their next Tab press starts them from the very top of the page, forcing them to tab through everything again to get back to where they were.',
       },
       {
         title: 'The right markup and click behaviour',
@@ -921,6 +969,8 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
         ],
         pitfalls: ['Styling a box to look like a modal with no role. To a screen reader it is just more page content.'],
         checkpoint: 'What would happen when clicking inside the dialog if `stopPropagation` were removed?',
+        checkpointAnswer:
+          'A click inside the dialog would still bubble up to the backdrop element, since bubbling happens regardless of where the click handler is attached. The backdrop\'s `onClick={close}` would then fire for every click inside the dialog too, closing it the instant the user tries to interact with anything inside, such as clicking a button or selecting text in a field.',
       },
       {
         title: 'Move focus in and handle Escape',
@@ -954,6 +1004,8 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
           },
         ],
         checkpoint: 'Why listen for keys on `document` rather than on the dialog element?',
+        checkpointAnswer:
+          'Keyboard events target whatever element currently has focus, and that could be any button or input inside the dialog, not the dialog\'s outer container itself. Listening on `document` catches the keydown regardless of which specific descendant currently holds focus, since the event still bubbles up to `document` from wherever it originated.',
       },
       {
         title: 'Keep Tab inside the dialog',
@@ -980,6 +1032,8 @@ const dialogRef = useRef<HTMLDivElement | null>(null)`,
           },
         ],
         checkpoint: 'Name two things the built-in `<dialog>` element does for you that this version does by hand.',
+        checkpointAnswer:
+          'Calling `dialogEl.showModal()` automatically traps focus inside the dialog and makes the rest of the page inert (unreachable by Tab or click) without any manual querySelectorAll or keydown handling. It also closes on Escape by default, and its list of focusable elements is always current since the browser tracks it live, rather than being captured once at open time the way the hand-rolled version does.',
       },
     ],
   },
@@ -1027,6 +1081,8 @@ const BULK_DISCOUNT_RATE = 0.1`,
           },
         ],
         checkpoint: 'Describe how a stored `total` ends up wrong. Which actions would all have to update it?',
+        checkpointAnswer:
+          'If `total` lived in its own state, then `addItem`, `removeItem`, and any future action that affects price (like applying a discount code) would each need to remember to recalculate and update it. Miss one, or get the order of updates wrong in one of them, and `total` silently drifts from what the cart contents actually add up to. Deriving it fresh from `cart` every time removes the possibility of that class of bug entirely, since there is nothing separate to forget to update.',
       },
       {
         title: 'Add and remove, cleaning up at zero',
@@ -1054,6 +1110,8 @@ const BULK_DISCOUNT_RATE = 0.1`,
         ],
         pitfalls: ['Changing `prev` directly. React sees the same object and does not re-render.'],
         checkpoint: 'Why must `removeItem` copy the object rather than deleting from `prev`?',
+        checkpointAnswer:
+          'React decides whether to re-render by comparing the new state reference to the old one. If `removeItem` mutated `prev` directly (deleting a key on the same object) and returned that same object, React would see the identical reference it already had and conclude nothing changed, so the UI would not update even though the underlying data did. Copying first (`{ ...prev }`) guarantees a new object reference, which is what tells React a render is needed.',
       },
       {
         title: 'Calculate every number in one place',
@@ -1086,6 +1144,8 @@ const BULK_DISCOUNT_RATE = 0.1`,
           },
         ],
         checkpoint: '"Free shipping over $400." Before or after the discount? Discount per product or across the cart? What should you do when a spec is unclear like this?',
+        checkpointAnswer:
+          'This demo applies the discount per product line (a single line reaching quantity 3 gets 10% off just that line) and checks the $400 free-shipping threshold against the total after that discount has been subtracted. Either reading is defensible, which is exactly the point: when a spec leaves a genuine ambiguity like this, the right move is to pick a reasonable interpretation, implement it clearly with named constants, and say out loud what you assumed and why, rather than silently guessing or blocking on someone else to clarify.',
       },
       {
         title: 'Show it and check it',
@@ -1113,6 +1173,8 @@ const BULK_DISCOUNT_RATE = 0.1`,
           },
         ],
         checkpoint: 'Give one advantage and one cost of storing the cart as a record keyed by id rather than as an array.',
+        checkpointAnswer:
+          'Advantage: checking whether a product is in the cart, or updating its quantity, is a direct key lookup (`cart[id]`), rather than scanning an array with `.find()`. Cost: you lose a natural, stable ordering for iteration, since object key order is not something you should rely on for display purposes; if the cart needed to show items in the order they were added, you would need to track that separately.',
       },
     ],
   },
@@ -1184,6 +1246,8 @@ const [active, setActive] = useState(0)`,
           },
         ],
         checkpoint: 'For a screen reader, what is the difference between `hidden` and `opacity: 0`?',
+        checkpointAnswer:
+          '`hidden` removes the element from the accessibility tree entirely, so a screen reader skips it completely, as if it were not in the document at all. `opacity: 0` only makes the element invisible to sighted users; it is still present in the accessibility tree and still focusable and readable, so a screen reader user could tab into or have announced content from a panel that a sighted user cannot even see.',
       },
       {
         title: 'Only one tab in the Tab order',
@@ -1206,6 +1270,8 @@ const [active, setActive] = useState(0)`,
           },
         ],
         checkpoint: 'Why is it a problem for keyboard users if every tab is in the normal Tab order?',
+        checkpointAnswer:
+          'A keyboard user tabbing through the page would have to press Tab once for every individual tab button just to get past the tab list, the same way they would for any other row of separate buttons. That is slower and less predictable than how a native widget like a `<select>` behaves, where Tab moves past the whole control in one press and arrow keys handle movement within it. Roving tabindex makes the custom tabs behave like that native expectation.',
       },
       {
         title: 'Arrow, Home and End keys',
@@ -1235,6 +1301,8 @@ const [active, setActive] = useState(0)`,
         ],
         pitfalls: ['Calling `preventDefault()` before the early return. That breaks Tab and Enter inside the tab list.'],
         checkpoint: 'Why does the handler return early for keys it does not recognise, rather than just doing nothing?',
+        checkpointAnswer:
+          'The `return` happens before `e.preventDefault()` is called, which matters because `preventDefault()` would otherwise run unconditionally for every keypress inside the tablist, including Tab, Enter, and any other key the browser needs to handle normally. Returning early for unrecognised keys means only the keys this handler actually understands (arrows, Home, End) get their default behaviour suppressed, leaving everything else, like Tab moving focus out of the tablist, working as the browser expects.',
       },
       {
         title: 'An accordion with real buttons',
@@ -1279,6 +1347,8 @@ const [active, setActive] = useState(0)`,
           },
         ],
         checkpoint: 'What would you change to allow more than one accordion section open at once?',
+        checkpointAnswer:
+          'Replace `openId: string | null` with something that can hold several ids at once, such as `openIds: Set<string>`. The click handler would add the id to the set if it is not present or remove it if it is, instead of comparing against a single value, and each panel\'s `hidden` prop would check `openIds.has(item.id)` rather than `openId === item.id`.',
       },
     ],
   },
@@ -1332,6 +1402,8 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
           },
         ],
         checkpoint: 'Why does the server need to send `total` when it only returns five items?',
+        checkpointAnswer:
+          'The client needs `total` to calculate how many pages exist (`Math.ceil(total / PAGE_SIZE)`) so it can render the right number of numbered buttons and know when Next should be disabled. Since the client only ever receives one page at a time, it has no other way to know how much data exists beyond what is currently on screen, so the server has to state it explicitly.',
       },
       {
         title: 'Fetch when the page changes, ignoring old answers',
@@ -1360,6 +1432,8 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
           },
         ],
         checkpoint: 'Trace the page-3-then-page-1 sequence and show where the out-of-date result is stopped.',
+        checkpointAnswer:
+          'Clicking page 3 starts an effect run with its own `cancelled = false`. Clicking page 1 shortly after re-runs the effect: React calls the cleanup from the page-3 run first, setting that run\'s `cancelled` to `true`, then starts a fresh run for page 1 with its own new `cancelled = false`. When the page-3 response eventually arrives, its `.then` checks its own `cancelled` variable, sees it is `true`, and returns immediately without calling `setItems`, so the page-1 data already on screen is never overwritten.',
       },
       {
         title: 'Placeholder rows and page buttons',
@@ -1388,6 +1462,8 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
           },
         ],
         checkpoint: 'Why show placeholder rows rather than an empty list while loading?',
+        checkpointAnswer:
+          'An empty list would make the page content shrink to nothing and then jump back to full height once data arrives, which is jarring and can shift other page elements around it. Placeholder rows at the same size as real rows keep the layout stable across every page change, and they also give the user visible confirmation that something is happening rather than a silent, ambiguous gap.',
       },
       {
         title: 'The pagination design conversation',
@@ -1406,6 +1482,8 @@ const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))`,
           },
         ],
         checkpoint: 'A list has 300 rows. Which approach do you pick and why? What changes at 3 million rows, or when new rows arrive constantly?',
+        checkpointAnswer:
+          'At 300 rows, client-side pagination is reasonable: the whole dataset is small enough to fetch once, and page switches then feel instant with no further network calls. At 3 million rows, that stops being viable and you need server-side pagination with numbered or truncated pages, since the browser cannot hold or usefully render that much data at once. If rows are also being inserted or removed constantly, numbered pages can skip or repeat rows as the underlying data shifts under them; cursor-based pagination avoids that because each cursor refers to a stable position relative to the data at the time, not a numeric offset that drifts.',
       },
     ],
   },
@@ -1453,6 +1531,8 @@ const liveRegionRef = useRef<HTMLDivElement | null>(null)`,
           },
         ],
         checkpoint: 'What does `overId` control on screen, and why is it separate from `dragId`?',
+        checkpointAnswer:
+          '`overId` drives the dashed drop-indicator border that shows which row the dragged item would land on if dropped right now. It has to be separate from `dragId` because they answer different questions and change at different times: `dragId` is set once, when the drag starts, and stays fixed until the drag ends, while `overId` changes continuously as the pointer moves over different rows during the drag.',
       },
       {
         title: 'The drag events, including the famous gotcha',
@@ -1489,6 +1569,8 @@ function handleDragOver(e: React.DragEvent, id: string) {
         ],
         pitfalls: ['Leaving out `preventDefault()` in dragover. The symptom is "drop does nothing", with no error to help you.'],
         checkpoint: 'What exactly happens when `preventDefault()` is missing from `dragover`, and why is it hard to debug?',
+        checkpointAnswer:
+          'Without calling `preventDefault()` in `dragover`, the browser treats the element as not accepting drops at all, so releasing the mouse button never fires the `drop` event on it, and the drag simply ends with the dragged element snapping back or vanishing with no visible reaction. It is hard to debug because there is no error, no warning, and no exception anywhere; the code silently does nothing, which gives you no clue where to even start looking.',
       },
       {
         title: 'Reorder on drop',
@@ -1524,6 +1606,8 @@ function handleDragOver(e: React.DragEvent, id: string) {
           },
         ],
         checkpoint: 'Why must the reorder work on `[...prev]` rather than on `prev` directly?',
+        checkpointAnswer:
+          '`Array.prototype.splice` mutates the array it is called on in place. Calling it directly on `prev` would change the existing array while leaving its reference identical, so React would not detect that state actually changed and would skip re-rendering. Spreading into a new array first (`[...prev]`) gives `splice` a fresh array to mutate, and returning that new array from the updater gives React a new reference to compare against, which is what triggers the re-render.',
       },
       {
         title: 'Keyboard buttons and announcements',
@@ -1565,6 +1649,8 @@ function handleDragOver(e: React.DragEvent, id: string) {
           },
         ],
         checkpoint: 'Why are the arrow buttons a requirement rather than a nice extra?',
+        checkpointAnswer:
+          'The native HTML5 Drag and Drop API has no keyboard equivalent built in at all; there is no key combination that triggers a drag the way Enter triggers a button click. That means a reorderable list built only with drag handlers is completely unusable for anyone navigating by keyboard or screen reader, not just harder to use. The arrow buttons are the only way those users can reorder the list at all, which makes them a core part of the feature rather than a bonus.',
       },
     ],
   },

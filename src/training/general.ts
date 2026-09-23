@@ -65,6 +65,8 @@ user = {}           // TypeError: assignment to constant`,
         ],
         pitfalls: ['Saying "`const` makes it immutable". It makes the variable unreassignable; the contents can still change.'],
         checkpoint: 'Without running it, what does the `var` version log if the timeout is 1000ms instead of 0? Why does the delay not matter?',
+        checkpointAnswer:
+          'Still 3, 3, 3. The delay only changes when the callbacks run, not what value of `i` they see. All three closures share the single `var i` from the shared function scope, and by the time any of them run, whether after 0ms or 1000ms, the loop has already finished and `i` has already reached 3. The delay is irrelevant because the bug is about which variable is captured, not about timing.',
       },
       {
         title: 'Closures',
@@ -107,6 +109,8 @@ save(); save(); save() // logs "saved" once, 300ms after the last call`,
           },
         ],
         checkpoint: 'Explain, using the counter example, why two calls to `makeCounter()` do not share a count.',
+        checkpointAnswer:
+          'Every time `makeCounter()` is called, it creates a brand new `count` variable in a brand new execution of the function, and returns a brand new inner function that closes over that particular `count`. `next` and `other` are two separate inner functions, each with its own closure over its own `count` variable, so incrementing one has no way to reach or affect the other\'s.',
       },
       {
         title: 'The event loop: what runs first',
@@ -139,6 +143,8 @@ console.log('2')
         ],
         pitfalls: ['Assuming `setTimeout(fn, 0)` runs immediately. It runs after the current code and all pending promise callbacks.'],
         checkpoint: 'Why can a long synchronous loop freeze the whole page, including click handlers and timers?',
+        checkpointAnswer:
+          'JavaScript runs on a single thread, and that thread cannot do anything else while it is busy executing your loop, including handling clicks or firing due timers. Those events and callbacks are simply queued up, waiting for the thread to become free. Until the synchronous code finishes, the event loop never gets a turn to process the queue, so the page appears completely frozen no matter how many things are waiting to happen.',
       },
       {
         title: '`this`, equality, and copying',
@@ -178,6 +184,8 @@ a.address.city // still 'York'`,
           },
         ],
         checkpoint: 'Why do React state updates use spread (`{ ...prev, x: 1 }`) rather than editing the object directly, and when is a shallow copy not enough?',
+        checkpointAnswer:
+          'React decides whether to re-render by comparing the new state reference to the old one, so mutating the existing object in place and returning the same reference would not be detected as a change. Spreading creates a new object reference with the updated field, which React can see differs from the previous one. A shallow copy is not enough when you are changing a nested value: spreading the outer object still leaves any nested object shared with the original, so you would need to spread that nested object too (or use structuredClone) to actually create an independent copy of it.',
       },
     ],
   },
@@ -234,6 +242,8 @@ a.address.city // still 'York'`,
         ],
         pitfalls: ['Using `array.includes` inside a loop over another array. It works on small data and collapses on large data.'],
         checkpoint: 'You have a list of 50,000 user ids and a list of 50,000 blocked ids. How would you find the users who are blocked, and why not with two nested loops?',
+        checkpointAnswer:
+          'Put the blocked ids into a `Set` first, then loop once over the user ids checking `blockedSet.has(userId)` for each. That is roughly 100,000 constant-time operations total. Two nested loops (checking each user id against every blocked id with `includes`) would be 50,000 × 50,000, or 2.5 billion comparisons in the worst case, which is far too slow to run in a browser.',
       },
       {
         title: 'Objects vs Maps',
@@ -264,6 +274,8 @@ for (const [key, value] of cache) { /* insertion order */ }`,
           },
         ],
         checkpoint: 'Give one case where a plain object is the better choice and one where a Map is.',
+        checkpointAnswer:
+          'A plain object suits a fixed-shape record with known, string keys, like a user profile (`{ name, email, age }`), where you mostly access specific named fields rather than iterate. A Map suits a dynamic lookup table where keys are added and removed at runtime, might not be strings, or where you need a reliable `size` and guaranteed insertion order, like a cache keyed by request objects or a frequency counter built up as you go.',
       },
       {
         title: 'Stacks and queues',
@@ -301,6 +313,8 @@ jobs.shift() // 'print A'  (oldest first)`,
           },
         ],
         checkpoint: 'Why is the JavaScript call stack a stack? What happens to it when a recursive function has no base case?',
+        checkpointAnswer:
+          'It is a stack because the most recently called function is always the next one to finish and be removed: when function A calls function B, B must return before A can continue, so B sits "on top of" A until it is done, matching Last In, First Out order. A recursive function with no base case keeps calling itself and pushing a new frame onto the stack every time, with nothing ever popping off, until the stack runs out of space and the browser throws a "Maximum call stack size exceeded" error.',
       },
       {
         title: 'Trees and graphs',
@@ -346,6 +360,8 @@ shortestPath(friends, 'ann', 'cy') // 2`,
         ],
         pitfalls: ['Forgetting `visited` in a graph search. On any cycle, the search never ends.'],
         checkpoint: 'Why does recursion suit trees but need extra care on graphs?',
+        checkpointAnswer:
+          'A tree has no cycles and every node has exactly one parent, so recursively visiting a node\'s children can never lead back to a node you have already visited, meaning the recursion is guaranteed to terminate on its own. A graph can have cycles, where following edges can lead back to an already-visited node, so naive recursion (or any traversal) without tracking visited nodes can loop forever; that is why graph traversals need an explicit `visited` set that trees do not.',
       },
     ],
   },
@@ -406,6 +422,8 @@ shortestPath(friends, 'ann', 'cy') // 2`,
         ],
         pitfalls: ['Missing the O(n) hiding inside `includes` or `find` when it is called in a loop.'],
         checkpoint: 'A function loops over 1,000 items and calls `list.find(...)` on a 1,000-item list each time. About how many operations is that?',
+        checkpointAnswer:
+          'Roughly 1,000,000 (1,000 × 1,000). Each `find` call is itself O(n), scanning up to 1,000 items, and it runs once per iteration of the outer loop, which also has 1,000 iterations. That hidden O(n) inside the loop is what turns an apparently O(n) function into an O(n²) one.',
       },
       {
         title: 'Binary search',
@@ -435,6 +453,8 @@ shortestPath(friends, 'ann', 'cy') // 2`,
           },
         ],
         checkpoint: 'You need to look up prices by product code thousands of times. Compare: linear search, binary search on a sorted array, and a Map. Which would you pick?',
+        checkpointAnswer:
+          'A Map, keyed by product code. Linear search is O(n) per lookup, which adds up badly across thousands of lookups. Binary search is O(log n) per lookup but requires the array to stay sorted and costs O(n log n) up front to sort it. A Map gives O(1) lookups after a one-time O(n) build cost, which is the best fit here since the same codes are being looked up repeatedly rather than the data being scanned once.',
       },
       {
         title: 'Sorting',
@@ -458,6 +478,8 @@ shortestPath(friends, 'ann', 'cy') // 2`,
         ],
         pitfalls: ['Calling `.sort()` on numbers with no compare function.', 'Sorting shared data in place.'],
         checkpoint: 'Why can a comparison-based sort not be faster than O(n log n) in general? (A one-sentence intuition is fine.)',
+        checkpointAnswer:
+          'There are n! possible orderings of n items, and each comparison can only rule out roughly half of the remaining possibilities, so you need at least about log₂(n!) comparisons to narrow it down to the one correct order, and log₂(n!) works out to be proportional to n log n.',
       },
       {
         title: 'Recursion and memoisation',
@@ -495,6 +517,8 @@ shortestPath(friends, 'ann', 'cy') // 2`,
         ],
         pitfalls: ['A recursive function with no base case, which overflows the call stack.'],
         checkpoint: 'What is the trade-off memoisation makes, and when would it not be worth it?',
+        checkpointAnswer:
+          'Memoisation trades memory for time: it keeps every previously computed answer around so it never has to redo that work, at the cost of storing all those answers. It is not worth it when a function is rarely, if ever, called twice with the same argument (the cache would just take up memory without ever being reused), or when the arguments are large, complex objects that are expensive to use as cache keys or that would keep large amounts of data alive in memory unnecessarily.',
       },
     ],
   },
@@ -538,6 +562,8 @@ shortestPath(friends, 'ann', 'cy') // 2`,
           },
         ],
         checkpoint: 'Why does a large stylesheet in the head delay the first paint even if the HTML has fully arrived?',
+        checkpointAnswer:
+          'The browser cannot paint until it has combined the DOM with the CSSOM into a render tree, and it deliberately waits for stylesheets to finish downloading and parsing before doing that, so users never see a flash of unstyled content. Even with the full HTML already parsed into a DOM, a large stylesheet still has to be fully fetched and parsed into the CSSOM before that combination, and therefore the first paint, can happen.',
       },
       {
         title: 'Reflow, repaint, and smooth animation',
@@ -569,6 +595,8 @@ items.forEach((el, i) => { el.style.height = heights[i] + 10 + 'px' })`,
           },
         ],
         checkpoint: 'Why does animating `transform` feel smoother than animating `left`?',
+        checkpointAnswer:
+          'Changing `left` affects the element\'s position in the normal flow, so the browser has to recompute layout (reflow) and then repaint on every single frame of the animation, which is expensive and can drop frames. `transform` moves the element visually without changing anything about layout, so the browser can hand the whole animation to the compositor, which can move the already-painted pixels around on the GPU without redoing layout or paint at all, which is why it stays smooth even on slower devices.',
       },
       {
         title: 'Events: bubbling and delegation',
@@ -592,6 +620,8 @@ items.forEach((el, i) => { el.style.height = heights[i] + 10 + 'px' })`,
         ],
         pitfalls: ['Confusing `stopPropagation` (stop bubbling) with `preventDefault` (stop the default action).'],
         checkpoint: 'You have a table with 5,000 rows, each with a delete button. Where do you attach the click listener, and why?',
+        checkpointAnswer:
+          'Attach a single click listener to the `<table>` (or its `<tbody>`) rather than one on every delete button. Inside the handler, check `event.target.closest("button.delete")` (or similar) to work out which row\'s button was actually clicked. This avoids creating and holding 5,000 separate listeners, which wastes memory and setup time, and it automatically covers rows added to the table later without needing to attach a new listener to each one.',
       },
       {
         title: 'Storing data in the browser',
@@ -616,6 +646,8 @@ localStorage.setItem('prefs', JSON.stringify({ compact: true }))`,
           },
         ],
         checkpoint: 'Where would you store a login session token, a "dark mode" preference, and a 20MB offline dataset? Give a reason for each.',
+        checkpointAnswer:
+          'Session token: an `HttpOnly`, `Secure`, `SameSite` cookie, so it is automatically sent with requests and is inaccessible to JavaScript, which limits the damage an XSS bug could do. Dark mode preference: `localStorage`, since it is small, does not need to go to the server, and should persist across visits and tabs. A 20MB offline dataset: IndexedDB, since it is far too large and too structured for localStorage\'s roughly 5MB synchronous string store, and IndexedDB is built for exactly this kind of larger, asynchronous client-side storage.',
       },
     ],
   },
@@ -660,6 +692,8 @@ const data = await res.json()`,
         ],
         pitfalls: ['Assuming `fetch` throws on a 4xx or 5xx response. It does not.'],
         checkpoint: 'Why is it safe for a client to automatically retry a failed PUT but risky to retry a failed POST?',
+        checkpointAnswer:
+          'PUT is idempotent by definition: it replaces a resource with a given representation, so sending the exact same PUT twice leaves the resource in the same final state either way, making a retry harmless. POST typically creates a new resource or triggers an action each time it is called, so retrying a POST that actually succeeded server-side but whose response was lost risks creating a duplicate order, duplicate comment, or duplicate charge.',
       },
       {
         title: 'CORS',
@@ -690,6 +724,8 @@ Access-Control-Allow-Headers: content-type`,
         ],
         pitfalls: ['Trying to fix CORS in the frontend. The header has to come from the server you are calling.'],
         checkpoint: 'A CORS error appears in the console but the request shows 200 in the network tab. What happened, and who has to change what?',
+        checkpointAnswer:
+          'The server received the request and responded successfully (hence the 200 in the network tab), but its response either omitted the `Access-Control-Allow-Origin` header or set it to a value that does not match the requesting page\'s origin. The browser still blocks the JavaScript code from reading that response, even though the response itself arrived fine. The fix has to happen on the server being called: it needs to include the correct CORS header naming the calling origin as allowed. Nothing the client does can work around this.',
       },
       {
         title: 'Caching',
@@ -711,6 +747,8 @@ Cache-Control: public, max-age=31536000, immutable`,
           },
         ],
         checkpoint: 'Why can you cache `index-4f3a9c1b.js` for a year but not `index.html`?',
+        checkpointAnswer:
+          'The hash in `index-4f3a9c1b.js` is derived from the file\'s contents, so any change to the file produces a different hash and therefore a different filename entirely. Caching the old filename forever is safe because that exact filename will never point at different content. `index.html` keeps the same filename across deploys but its content (including which hashed asset filenames it references) changes every time you ship, so caching it long would mean users keep loading an old page that references assets that may no longer exist or are out of date.',
       },
       {
         title: 'From URL to page',
@@ -738,6 +776,8 @@ Cache-Control: public, max-age=31536000, immutable`,
           },
         ],
         checkpoint: 'Give the six stages from memory, then name one place caching helps in the first half and one in the second half.',
+        checkpointAnswer:
+          '1) DNS lookup. 2) TCP connect and TLS handshake. 3) Send the HTTP request. 4) Receive the response. 5) Parse HTML, discover and fetch CSS/scripts/images. 6) Build the render tree, layout, paint. In the first half, a cached DNS lookup (from the OS or browser DNS cache) skips step 1 entirely on a repeat visit. In the second half, a cached (or hashed-and-long-cached) CSS or JS asset in step 5 skips its own network round-trip, letting the browser move straight to parsing it toward the render tree.',
       },
     ],
   },
@@ -791,6 +831,8 @@ el.textContent = comment`,
         ],
         pitfalls: ['Believing React makes XSS impossible. It makes the default safe; the escape hatches are still there.'],
         checkpoint: 'A product page renders a seller-written description with `dangerouslySetInnerHTML`. What is the risk and what is the fix?',
+        checkpointAnswer:
+          'The risk is stored XSS: a malicious seller could write a description containing a script (or an `<img onerror>` payload) that runs in the browser of every customer who views that product page, potentially stealing their session or acting on their behalf. The fix is to run the description through a sanitising library like DOMPurify before passing it to `dangerouslySetInnerHTML`, which strips out scripts and dangerous attributes while keeping safe formatting tags like `<b>` or `<a>`.',
       },
       {
         title: 'CSRF: forged requests',
@@ -820,6 +862,8 @@ el.textContent = comment`,
           },
         ],
         checkpoint: 'Why does storing the session in an `HttpOnly` cookie protect against XSS token theft but not, by itself, against CSRF?',
+        checkpointAnswer:
+          '`HttpOnly` only stops JavaScript from reading the cookie\'s value, which is exactly what protects it from an XSS payload trying to steal it and send it somewhere else. CSRF does not need to read the cookie at all: it relies on the browser automatically attaching the cookie to any request sent to that domain, including one triggered by a form or script on a completely different site. The cookie being unreadable does not stop it from still being sent, which is why CSRF needs its own separate defences like `SameSite` and anti-CSRF tokens.',
       },
       {
         title: 'Content Security Policy',
@@ -843,6 +887,8 @@ el.textContent = comment`,
           },
         ],
         checkpoint: 'An attacker manages to inject `<script src="https://evil.com/x.js">` into a page with the policy above. What happens?',
+        checkpointAnswer:
+          'The browser refuses to load and execute it. The policy\'s `script-src` only allows scripts from `\'self\'` (the page\'s own origin) and `https://cdnjs.cloudflare.com`, and `https://evil.com` is neither, so the script request is blocked before it even runs. The injected tag exists in the DOM, but it never executes, and the blocked attempt shows up as a CSP violation in the browser console.',
       },
       {
         title: 'Secrets, HTTPS, and dependencies',
@@ -864,6 +910,8 @@ STRIPE_SECRET_KEY=...      // never prefix this; keep it server-side`,
           },
         ],
         checkpoint: 'A colleague suggests putting the payment provider\'s secret key in a `VITE_` variable "just for staging". What do you say?',
+        checkpointAnswer:
+          'No, because "staging" does not change what happens to the value: any `VITE_`-prefixed variable is inlined into the built JavaScript bundle, which anyone can open in their browser\'s dev tools or view-source and read in plain text, regardless of environment. A privileged secret key with write access to a paid API is exactly the kind of value that must never leave the server. The correct pattern is for the frontend to call your own backend, which holds the secret and makes the payment provider call on the frontend\'s behalf.',
       },
     ],
   },
@@ -921,6 +969,8 @@ GET  /orders/42/items/7 // one item of that order`,
         ],
         pitfalls: ['Putting a verb in the URL, like `/orders/42/cancel`. Prefer `PATCH /orders/42` with `{ status: "cancelled" }`, though an action endpoint is sometimes reasonable for something that is not a field update, like `/orders/42/refund`.'],
         checkpoint: 'Design the URLs for: listing a user\'s comments, adding a comment, and deleting one specific comment.',
+        checkpointAnswer:
+          'GET /users/17/comments to list them (or GET /comments?userId=17 if comments are more naturally a top-level collection). POST /users/17/comments to add one, with the comment body in the request payload. DELETE /comments/9 to remove one specific comment by its own id, since once a comment has its own id it no longer needs the user id in the path to be uniquely identified.',
       },
       {
         title: 'Methods and status codes in practice',
@@ -971,6 +1021,8 @@ body: { "items": [] }
         ],
         pitfalls: ['Returning 200 for every response, including failures, with the real result hidden inside the JSON body. This defeats `response.ok`, caching, and anyone skimming the network tab.'],
         checkpoint: 'A PATCH to update one field returns the entire updated order, not just that field. Is that a REST violation? Why might an API do this anyway?',
+        checkpointAnswer:
+          'No, this is not a violation. REST constrains what the request body should contain (just the changed fields for a PATCH), but says nothing about the response body having to match that shape. An API commonly returns the full, current resource anyway so the client does not need a separate GET to see the up-to-date state, especially when the server applies its own logic (like recalculating a total or bumping an `updatedAt` timestamp) that the client could not have predicted from the partial update it sent.',
       },
       {
         title: 'A component that fetches a resource',
@@ -1032,6 +1084,8 @@ function OrderDetail({ orderId }: { orderId: number }) {
         ],
         pitfalls: ['Parsing `res.json()` before checking `res.ok`. An error response is often JSON too, so this "succeeds" and quietly stores an error object as if it were the order.'],
         checkpoint: 'Why does the effect check `err.name !== "AbortError"` before setting the error state?',
+        checkpointAnswer:
+          'An `AbortError` means the request was deliberately cancelled, either because the component unmounted or `orderId` changed and a newer request has taken over, not because anything actually went wrong. Treating that as a real error would briefly flash a "could not load order" message even though a fresh, correct request is already in flight and about to replace it, so the abort case is excluded and silently ignored instead.',
       },
       {
         title: 'Creating and updating from a component',
@@ -1098,6 +1152,8 @@ function OrderDetail({ orderId }: { orderId: number }) {
           'Updating local state to the "expected" result instead of the server\'s actual response, which drifts if the server applies extra logic (like recalculating a total).',
         ],
         checkpoint: 'Why does `handleCancel` call `onUpdated(updated)` with the server\'s response instead of just setting `order.status = "cancelled"` locally?',
+        checkpointAnswer:
+          'The server is the actual source of truth for what happened: it might apply logic the client cannot predict, such as also adjusting the total, recording a cancellation timestamp, or, in an edge case, rejecting the cancellation for a reason the client did not anticipate. Trusting a locally-guessed result risks the UI silently drifting out of sync with what the server actually recorded, the same principle the optimistic-todo module\'s toggle and retry logic follows.',
       },
     ],
   },
@@ -1148,6 +1204,8 @@ function OrderDetail({ orderId }: { orderId: number }) {
         ],
         pitfalls: ['Storing derived values in state and syncing them with an effect. It adds lag and a second source of truth.'],
         checkpoint: 'A child component re-renders even though its own props did not change. What is the most likely reason?',
+        checkpointAnswer:
+          'Its parent re-rendered. By default, when a component re-renders (because its own state or props changed), React re-renders every child underneath it too, regardless of whether that particular child\'s own props actually changed. This is normal React behaviour, not a bug; it only becomes worth addressing (with `memo`, for example) if that re-render is measurably expensive.',
       },
       {
         title: 'State is a snapshot',
@@ -1175,6 +1233,8 @@ function OrderDetail({ orderId }: { orderId: number }) {
           },
         ],
         checkpoint: 'Why does `setItems([...items, newItem])` inside a promise callback risk dropping items, while `setItems((prev) => [...prev, newItem])` does not?',
+        checkpointAnswer:
+          '`items` inside the callback is whatever value it was at the time the callback function was created, a snapshot from that render, which can be stale by the time the promise resolves, especially if another update happened in between. `setItems([...items, newItem])` builds off that possibly-stale snapshot, potentially discarding items added since. The functional form `(prev) => [...prev, newItem]` is called by React with whatever the actual latest state is at the moment the update is applied, so it always builds on top of every update that has happened so far, not just the one visible when the callback was defined.',
       },
       {
         title: 'Keys',
@@ -1196,6 +1256,8 @@ function OrderDetail({ orderId }: { orderId: number }) {
         ],
         pitfalls: ['Using the index as a key for a list that can change order or length.'],
         checkpoint: 'You render a list of inputs keyed by index. The user types in the first one, then deletes the first row. What does the user see, and why?',
+        checkpointAnswer:
+          'The text the user typed appears to jump to what is now the first row, rather than disappearing along with the row it was actually typed into. This happens because React matches elements by key across renders, and since the keys are indexes (0, 1, 2, …), after deletion every remaining row shifts down to take on the key that used to belong to the row above it. React sees "index 0 still exists" and reuses that same input DOM node, including whatever the user had typed into it, for what is now a different underlying todo.',
       },
       {
         title: 'When to use an effect',
@@ -1230,6 +1292,8 @@ const fullName = first + ' ' + last`,
         ],
         pitfalls: ['Using an effect to copy props into state, or to derive one state value from another.'],
         checkpoint: 'For each: fetching a user on mount, formatting a price for display, focusing an input after it appears, and filtering a list by a search term. Which need an effect?',
+        checkpointAnswer:
+          'Fetching a user on mount needs an effect, since it is reaching outside React to talk to a network, which is exactly what effects are for. Focusing an input after it appears also needs an effect, since it is reaching into the DOM to imperatively move focus, another form of talking to something outside React\'s own rendering. Formatting a price for display and filtering a list by a search term do not need an effect at all: both can be computed directly during render from the props or state already available, the same derived-value pattern the data-table module covers.',
       },
     ],
   },
