@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar'
 import { ChallengePage } from './components/ChallengePage'
 import { TrainingPage } from './components/TrainingPage'
 import { TestPage } from './components/TestPage'
+import { JavaScriptPage } from './components/JavaScriptPage'
 import { challenges } from './challenges/registry'
 import { GENERAL_CATEGORY, generalTests } from './tests/general'
 import styles from './components/Layout.module.css'
@@ -30,7 +31,8 @@ function Landing() {
       <p>{challenges.length} challenges are currently available, grouped by category in the sidebar.</p>
       <p>
         Use the <strong>Training</strong> tab to build each one step by step, then the{' '}
-        <strong>Tests</strong> tab to check what stuck.
+        <strong>Tests</strong> tab to check what stuck. The <strong>JavaScript</strong> tab has
+        standalone language-level coding problems, separate from the challenges above.
       </p>
     </div>
   )
@@ -119,6 +121,7 @@ export default function App() {
           <Route path="/training/:id" element={<TrainingPage />} />
           <Route path="/tests" element={<TestsLanding />} />
           <Route path="/tests/:id" element={<TestPage />} />
+          <Route path="/javascript" element={<JavaScriptPage />} />
         </Routes>
       </main>
     </div>

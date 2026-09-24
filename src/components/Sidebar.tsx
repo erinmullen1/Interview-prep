@@ -1,23 +1,27 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { categories, challenges } from '../challenges/registry'
 import { GENERAL_CATEGORY, generalTests } from '../tests/general'
+import { jsCategories } from '../javascript/problems'
+import { slugify } from '../javascript/slugify'
 import styles from './Sidebar.module.css'
 
 interface SidebarProps {
   open: boolean
 }
 
-type Mode = 'challenge' | 'training' | 'tests'
+type Mode = 'challenge' | 'training' | 'tests' | 'javascript'
 
 const MODES: { key: Mode; label: string; hint: string }[] = [
   { key: 'challenge', label: 'Challenges', hint: 'Working demos with explanations' },
   { key: 'training', label: 'Training', hint: 'Guided, step-by-step builds' },
   { key: 'tests', label: 'Tests', hint: 'Quiz yourself on each challenge' },
+  { key: 'javascript', label: 'JavaScript', hint: 'Language-level coding problems' },
 ]
 
 function modeFromPath(pathname: string): Mode {
   if (pathname.startsWith('/training')) return 'training'
   if (pathname.startsWith('/tests')) return 'tests'
+  if (pathname.startsWith('/javascript')) return 'javascript'
   return 'challenge'
 }
 
@@ -48,22 +52,23 @@ export function Sidebar({ open }: SidebarProps) {
       </div>
       <p className={styles.modeHint}>{active.hint}</p>
 
-      {categories.map((category) => (
-        <div key={category}>
-          <div className={styles.category}>{category}</div>
-          {challenges
-            .filter((c) => c.category === category)
-            .map((c) => (
-              <NavLink
-                key={c.id}
-                to={`/${mode}/${c.id}`}
-                className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}
-              >
-                {c.title}
-              </NavLink>
-            ))}
-        </div>
-      ))}
+      {mode !== 'javascript' &&
+        categories.map((category) => (
+          <div key={category}>
+            <div className={styles.category}>{category}</div>
+            {challenges
+              .filter((c) => c.category === category)
+              .map((c) => (
+                <NavLink
+                  key={c.id}
+                  to={`/${mode}/${c.id}`}
+                  className={({ isActive }) => (isActive ? styles.linkActive : styles.link)}
+                >
+                  {c.title}
+                </NavLink>
+              ))}
+          </div>
+        ))}
 
       {mode === 'tests' && (
         <div>
@@ -76,6 +81,16 @@ export function Sidebar({ open }: SidebarProps) {
             >
               {t.title}
             </NavLink>
+          ))}
+        </div>
+      )}
+
+      {mode === 'javascript' && (
+        <div>
+          {jsCategories.map((c) => (
+            <a key={c.name} href={`#js-${slugify(c.name)}`} className={styles.link}>
+              {c.name}
+            </a>
           ))}
         </div>
       )}
