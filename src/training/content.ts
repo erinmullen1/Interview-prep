@@ -17,6 +17,8 @@ export interface TrainingStep {
   pitfalls?: string[]
   /** A question to answer in your own words before moving on. */
   checkpoint: string
+  /** A model answer, revealed on demand after attempting the checkpoint. */
+  checkpointAnswer?: string
 }
 
 export interface KeyTerm {
@@ -697,6 +699,247 @@ useEffect(() => {
           },
         ],
         checkpoint: 'Why mark every field touched on submit, rather than just refusing to submit?',
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------------
+  {
+    challengeId: 'schema-validation',
+    intro:
+      'Hand-written validation works for a small form, but rules soon scatter across the component and drift from what the server enforces. This module moves every rule into one Yup schema, then wires it into a form: per-field checks on blur, cross-field and conditional rules, an async check, and a submit that returns clean, typed data. It finishes by plugging the same schema into React Hook Form.',
+    outcomes: [
+      'Explain the difference between validating and parsing',
+      'Write a Yup schema with field, cross-field, conditional and async rules',
+      'Validate one field on blur and the whole form on submit',
+      'Use the same schema with React Hook Form or Formik',
+    ],
+    terms: [
+      { term: 'Schema', meaning: 'A single object that describes the shape of valid data and every rule it must pass.' },
+      { term: 'Parse', meaning: 'Validate and also convert: turn the raw string "42" into the number 42, trim whitespace, drop unused fields.' },
+      { term: 'Cross-field rule', meaning: 'A rule that compares two fields, like "confirm password must equal password".' },
+      { term: 'Conditional rule', meaning: 'A rule that only applies when another field has a certain value, like "company name is required for business accounts".' },
+      { term: 'abortEarly', meaning: 'A Yup option. When false, validation collects every failure instead of stopping at the first one.' },
+      { term: 'Resolver', meaning: 'An adapter that lets a form library like React Hook Form use an external schema for its rules.' },
+    ],
+    steps: [
+      {
+        title: 'Why a schema, and what it returns',
+        summary: 'A schema holds every rule in one place, and returns clean, typed data when the input is valid.',
+        concept:
+          'Form inputs always give you strings and booleans. A schema does two jobs at once: it rejects input that breaks a rule, and it converts input that passes into the shape your code actually wants. That second job is called parsing. Because the rules live in one object, the same schema can run in the browser for fast feedback and on the server for real enforcement.',
+        walkthrough: [
+          {
+            text: 'Install Yup, then build a tiny schema by chaining rules onto a type. Read each chain left to right: "a string, trimmed, required, and shaped like an email".',
+            code: `npm install yup
+
+import * as yup from 'yup'
+
+const schema = yup.object({
+  email: yup.string().trim().required('Email is required.').email('Enter a valid email.'),
+  age: yup.number().typeError('Age must be a number.').required('Age is required.').min(18),
+})`,
+          },
+          {
+            text: 'Run it with `validate`. It returns a promise. On success you get the parsed output: the string "  21 " has become the number 21 and the email has been trimmed. On failure it rejects with a `ValidationError`.',
+            code: `const output = await schema.validate({ email: ' erin@example.com ', age: ' 21 ' })
+// { email: 'erin@example.com', age: 21 }
+
+await schema.validate({ email: 'nope', age: '12' })
+// throws ValidationError: "Enter a valid email."`,
+          },
+          {
+            text: 'Derive the TypeScript type from the schema instead of writing it by hand. Now the type and the rules can never disagree.',
+            code: `type FormValues = yup.InferType<typeof schema>
+// { email: string; age: number }`,
+          },
+        ],
+        pitfalls: ['Submitting the raw form state instead of the schema\'s output. You lose the trimming and type conversion the schema just did.'],
+        checkpoint: 'What is the difference between validating and parsing, and why does it matter which object you send to the server?',
+        checkpointAnswer:
+          'Validating only answers "is this acceptable?". Parsing also produces the cleaned value: strings trimmed, numbers converted from text, unused fields removed. You should send the parsed output, because it is the version that has actually passed every rule and has the right types. The raw form state may still hold " 21 " as a string or a stray field the schema would have stripped.',
+      },
+      {
+        title: 'Cross-field, conditional and async rules',
+        summary: 'Compare fields with ref, switch rules on with when, and add your own (even async) checks with test.',
+        concept:
+          'Real forms have rules that depend on more than one value. Yup has three tools for this. `ref` points at a sibling field, `when` changes a field\'s rules based on another field, and `test` lets you write any custom rule, including one that returns a promise because it needs the server.',
+        walkthrough: [
+          {
+            text: 'Confirm password: `oneOf([yup.ref("password")])` means "must be one of these values", where the only allowed value is whatever `password` currently holds.',
+            code: `password: yup.string().required().min(8),
+confirmPassword: yup
+  .string()
+  .required('Please confirm your password.')
+  .oneOf([yup.ref('password')], 'Passwords do not match.'),`,
+          },
+          {
+            text: 'Conditional field: `when` receives the other field\'s value. Company name becomes required only for business accounts, and `strip()` removes it from the output otherwise.',
+            code: `isBusiness: yup.boolean().default(false),
+companyName: yup.string().when('isBusiness', {
+  is: true,
+  then: (s) => s.trim().required('Company name is required.'),
+  otherwise: (s) => s.strip(),
+}),`,
+          },
+          {
+            text: 'Async rule: `test` takes a name, a message and a function. Returning a promise makes the whole validation async. Skip the network call until the cheap rules pass, so you never ask the server about a one-letter username.',
+            code: `username: yup
+  .string()
+  .required()
+  .min(3)
+  .test('available', 'That username is already taken.', async (value) => {
+    if (!value || value.length < 3) return true
+    return api.isUsernameAvailable(value)
+  }),`,
+          },
+          {
+            text: 'Empty number inputs are a classic gotcha. An empty string casts to `NaN`, which gives a confusing "must be a number" error. A `transform` turns it into `undefined` so the friendlier "required" message shows instead.',
+            code: `age: yup
+  .number()
+  .transform((value, original) => (original === '' ? undefined : value))
+  .typeError('Age must be a number.')
+  .required('Age is required.'),`,
+          },
+        ],
+        pitfalls: [
+          'Writing the "passwords match" check in the component as well as the schema. Keep every rule in the schema so there is one source of truth.',
+          'Letting the async test fire on every keystroke with no guard. It has the same out-of-order problem as the Debounced Search challenge.',
+        ],
+        checkpoint: 'Why does `strip()` matter in the `otherwise` branch of the company name rule?',
+        checkpointAnswer:
+          'Without it, a user who ticks "business", types a company name, then unticks the box would still send that company name to the server, even though the field is no longer visible or relevant. `strip()` removes the field from the parsed output entirely when the condition is false, so the submitted data only contains what actually applies.',
+      },
+      {
+        title: 'Per-field validation on blur',
+        summary: 'Use validateAt to check one field against the whole form, and guard async results against races.',
+        concept:
+          'Showing every error at once before the user has typed anything is hostile. The usual pattern is to validate a field when the user leaves it, then live on each change after that. Yup\'s `validateAt` checks just one field, but it is given the whole form so cross-field rules still see their sibling values.',
+        walkthrough: [
+          {
+            text: 'Keep raw values, errors and touched fields in state. The form holds strings; the schema is responsible for converting them.',
+            code: `const [values, setValues] = useState(INITIAL)
+const [errors, setErrors] = useState({})
+const [touched, setTouched] = useState({})`,
+          },
+          {
+            text: 'Validate one field. Each field gets a request counter so a slow async result can never overwrite a newer one.',
+            code: `const latestCheck = useRef({})
+
+async function validateField(field, nextValues) {
+  const id = (latestCheck.current[field] ?? 0) + 1
+  latestCheck.current[field] = id
+  let message
+  try {
+    await schema.validateAt(field, nextValues)
+  } catch (err) {
+    if (err instanceof ValidationError) message = err.message
+  }
+  if (latestCheck.current[field] !== id) return // superseded by a newer check
+  setErrors((e) => ({ ...e, [field]: message }))
+}`,
+          },
+          {
+            text: 'On blur, mark the field touched and validate it. On change, re-validate only if it is already touched. When a field has dependents, re-check those too, so "Passwords do not match" clears the moment the password changes to match.',
+            code: `const DEPENDENTS = { password: ['confirmPassword'], isBusiness: ['companyName'] }
+
+function revalidate(field, nextValues, nextTouched = touched) {
+  if (nextTouched[field]) validateField(field, nextValues)
+  for (const dep of DEPENDENTS[field] ?? []) {
+    if (nextTouched[dep]) validateField(dep, nextValues)
+  }
+}`,
+          },
+        ],
+        pitfalls: ['Calling `validateAt` with only the one field\'s value instead of the whole object. Cross-field rules then have nothing to compare against.'],
+        checkpoint: 'Why does changing the password need to re-run the confirm password rule?',
+        checkpointAnswer:
+          'The confirm password rule compares against the current password. If the user fixes a mismatch by editing the password field rather than the confirm field, the confirm field\'s own value never changed, so nothing would re-check it and the "Passwords do not match" error would stay on screen even though they now match. Re-validating dependents keeps cross-field errors in sync.',
+      },
+      {
+        title: 'Validate everything on submit',
+        summary: 'Run the whole schema with abortEarly false, map every error to its field, and submit the parsed output.',
+        concept:
+          'On submit you want every problem at once, not just the first. `abortEarly: false` makes Yup collect all failures into `err.inner`, each with a `path` naming the field. Mark every field touched so all those messages appear, and on success submit the value `validate` returned.',
+        walkthrough: [
+          {
+            text: 'Map Yup\'s aggregated error into a simple `{ field: message }` object, keeping the first message per field.',
+            code: `function toErrorMap(err) {
+  const errors = {}
+  for (const issue of err.inner) {
+    if (issue.path && !errors[issue.path]) errors[issue.path] = issue.message
+  }
+  return errors
+}`,
+          },
+          {
+            text: 'The submit handler. `validate` resolves to the parsed output on success; that is what you send.',
+            code: `async function handleSubmit(e) {
+  e.preventDefault()
+  setTouched(allFieldsTouched)
+  try {
+    const output = await schema.validate(values, { abortEarly: false })
+    setErrors({})
+    await api.signup(output) // parsed: trimmed, typed, stripped
+  } catch (err) {
+    if (err instanceof ValidationError) setErrors(toErrorMap(err))
+  }
+}`,
+          },
+          {
+            text: 'Keep the accessibility wiring from the hand-rolled form: `aria-invalid`, `aria-describedby` pointing at the message, and `role="alert"` so the error is announced.',
+            code: `<input aria-invalid={!!error} aria-describedby={error ? id + '-error' : undefined} />
+{error && <p id={id + '-error'} role="alert">{error}</p>}`,
+          },
+        ],
+        pitfalls: ['Forgetting `abortEarly: false`. The user fixes one error, submits, and only then discovers the next one.'],
+        checkpoint: 'What is in `err.inner` when `abortEarly` is false, and why is `path` important?',
+        checkpointAnswer:
+          '`err.inner` is an array with one `ValidationError` per failed rule across the whole object. Each one has a `message` and a `path`, which is the name of the field it belongs to (for nested data, something like `address.city`). The `path` is what lets you put each message next to the right input instead of showing a single list of errors at the top of the form.',
+      },
+      {
+        title: 'Plug the schema into a form library',
+        summary: 'In production, let React Hook Form or Formik manage the form and give them your schema as the rules.',
+        concept:
+          'Everything you wired by hand, touched state, re-validation, collecting errors and submitting, is what form libraries do. The schema stays exactly the same. You hand it to the library through a resolver (React Hook Form) or a prop (Formik), and keep the rules in one place.',
+        walkthrough: [
+          {
+            text: 'React Hook Form with the Yup resolver. `mode: "onTouched"` gives the same validate-on-blur-then-on-change behaviour as the demo. `data` in the submit handler is already the parsed output.',
+            code: `npm install react-hook-form @hookform/resolvers
+
+import { useForm } from 'react-hook-form'
+import { yupResolver } from '@hookform/resolvers/yup'
+
+function Signup() {
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+    resolver: yupResolver(schema),
+    mode: 'onTouched',
+  })
+
+  return (
+    <form onSubmit={handleSubmit((data) => api.signup(data))} noValidate>
+      <input {...register('email')} aria-invalid={!!errors.email} />
+      {errors.email && <p role="alert">{errors.email.message}</p>}
+      <button disabled={isSubmitting}>Sign up</button>
+    </form>
+  )
+}`,
+          },
+          {
+            text: 'Formik accepts a Yup schema directly through `validationSchema`.',
+            code: `<Formik initialValues={initial} validationSchema={schema} onSubmit={save}>
+  <Form>
+    <Field name="email" />
+    <ErrorMessage name="email" component="p" />
+  </Form>
+</Formik>`,
+          },
+          {
+            text: 'The last piece of theory: client validation is for user experience, not security. Anyone can bypass the browser. Run the same schema on the server before trusting the data.',
+          },
+        ],
+        checkpoint: 'If client-side validation can be bypassed, why bother with it at all?',
+        checkpointAnswer:
+          'Because it gives users instant, specific feedback without a round-trip to the server, which makes the form faster and less frustrating to fill in. It also saves the server from obviously bad requests. It just cannot be the only check: the server must validate again, ideally with the same schema, because it is the only place you control.',
       },
     ],
   },

@@ -262,6 +262,92 @@ fakeSaveApi().catch(() => setTodos(previous))`,
     ],
   },
   {
+    challengeId: 'schema-validation',
+    questions: [
+      {
+        prompt: 'What does a schema like Yup give you that hand-written `if` checks in a component do not?',
+        options: [
+          'Faster rendering',
+          'One declarative source of truth for every rule, which also parses input into typed output and can be reused on the server',
+          'Automatic server-side security',
+          'It removes the need for error messages',
+        ],
+        answer: 1,
+        explanation:
+          'The rules live in one object instead of being scattered through handlers. The same schema can run in the browser and on the server, and it converts raw strings into clean, typed values.',
+      },
+      {
+        prompt: 'What does this return?',
+        code: `const schema = yup.object({ age: yup.number().required() })
+await schema.validate({ age: '21' })`,
+        options: ['{ age: "21" }', '{ age: 21 }', 'true', 'It throws, because "21" is a string'],
+        answer: 1,
+        explanation:
+          '`validate` resolves to the cast output, not a boolean. `number()` converts the string "21" to the number 21. Use `isValid` if you only need true or false.',
+      },
+      {
+        prompt: 'Why pass `{ abortEarly: false }` to `schema.validate` on submit?',
+        options: [
+          'It makes validation synchronous',
+          'It collects every failing rule into `err.inner` instead of stopping at the first, so all errors can be shown at once',
+          'It skips async tests',
+          'It prevents the form from submitting',
+        ],
+        answer: 1,
+        explanation:
+          'By default Yup stops at the first failure. With `abortEarly: false`, `err.inner` holds one error per failed rule, each with a `path` naming its field.',
+      },
+      {
+        prompt: 'Which rule makes "confirm password" match "password"?',
+        options: [
+          "yup.string().equals('password')",
+          "yup.string().oneOf([yup.ref('password')], 'Passwords do not match.')",
+          "yup.string().matches(/password/)",
+          "yup.string().when('password', { is: true })",
+        ],
+        answer: 1,
+        explanation:
+          '`yup.ref("password")` points at the sibling field\'s current value, and `oneOf` requires this field to equal one of the listed values.',
+      },
+      {
+        prompt: 'A company name field should be required only for business accounts, and removed from the output otherwise. Which tool does that?',
+        options: [
+          '`.test()` with a regex',
+          "`.when('isBusiness', { is: true, then: (s) => s.required(), otherwise: (s) => s.strip() })`",
+          '`.oneOf([true])`',
+          '`.transform()`',
+        ],
+        answer: 1,
+        explanation:
+          '`when` switches a field\'s rules based on another field. `strip()` drops the field from the parsed output, so irrelevant data is never submitted.',
+      },
+      {
+        prompt: 'Why use `validateAt("confirmPassword", values)` on blur instead of validating just that field\'s value on its own?',
+        options: [
+          'It is faster',
+          'It checks one field\'s rules but against the whole object, so cross-field rules like ref("password") can see sibling values',
+          'It skips required checks',
+          'It only works with Formik',
+        ],
+        answer: 1,
+        explanation:
+          'Cross-field and conditional rules need the other fields. `validateAt` gives per-field errors while still passing the full form in.',
+      },
+      {
+        prompt: 'Client-side Yup validation passes. Is the data now safe to trust on the server?',
+        options: [
+          'Yes, the schema already ran',
+          'No. Anyone can bypass the browser, so the server must validate again, ideally with the same schema',
+          'Only if the request uses HTTPS',
+          'Only for async rules',
+        ],
+        answer: 1,
+        explanation:
+          'Client validation is for user experience. Requests can be sent without your form at all. Sharing the schema with the server is one of the main reasons to use one.',
+      },
+    ],
+  },
+  {
     challengeId: 'data-table',
     questions: [
       {

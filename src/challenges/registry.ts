@@ -4,6 +4,7 @@ import { meta as debouncedSearch } from './debounced-search/meta'
 import { meta as infiniteScroll } from './infinite-scroll/meta'
 import { meta as optimisticTodo } from './optimistic-todo/meta'
 import { meta as formValidation } from './form-validation/meta'
+import { meta as schemaValidation } from './schema-validation/meta'
 import { meta as dataTable } from './data-table/meta'
 import { meta as accessibleModal } from './accessible-modal/meta'
 import { meta as shoppingCart } from './shopping-cart/meta'
@@ -51,6 +52,11 @@ export const challenges: Challenge[] = [
     formValidation,
     () => import('./form-validation/Demo'),
     () => import('./form-validation/notes.mdx'),
+  ),
+  build(
+    schemaValidation,
+    () => import('./schema-validation/Demo'),
+    () => import('./schema-validation/notes.mdx'),
   ),
   build(
     dataTable,

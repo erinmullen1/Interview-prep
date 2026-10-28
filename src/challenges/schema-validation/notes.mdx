@@ -1,0 +1,123 @@
+### The problem
+
+The Multi-Field Form Validation challenge writes each rule by hand inside the
+component. That is fine for three fields. Once a form has a dozen fields,
+rules that depend on other fields, optional sections, and a server that needs
+to enforce the same rules, hand-written `if` statements scatter and drift.
+A **schema** puts every rule in one declarative object.
+
+### The theory: what validation actually is
+
+- **Validate vs. parse.** Validation answers "is this acceptable?". Parsing
+  also answers "and what is the clean, typed value?". Form inputs always give
+  you strings; a good schema both rejects bad input and converts good input
+  (`"42"` to `42`, `"  erin "` to `"erin"`). You submit the schema's output,
+  not the raw form state.
+- **Levels of rule.** *Field* rules look at one value (min length). *Cross-field*
+  rules compare values (confirm password). *Conditional* rules switch on based on
+  another field (company name only for business accounts). *Async* rules need a
+  server (username taken).
+- **When to run them.** On change feels naggy, on submit hides problems until
+  the end. The usual compromise, used here: validate a field on blur, then live
+  on every change after that, and validate everything on submit.
+- **Client vs. server.** Client-side validation is for user experience only.
+  Anyone can bypass it, so the server must validate again. Sharing one schema
+  between both is a big part of why schemas exist.
+
+### How Yup works
+
+A schema is built by chaining rules onto a type:
+
+```js
+const schema = yup.object({
+  email: yup.string().trim().required('Email is required.').email('Enter a valid email.'),
+  age: yup.number().typeError('Must be a number.').required().min(18),
+  password: yup.string().required().min(8),
+  confirmPassword: yup.string().oneOf([yup.ref('password')], 'Passwords do not match.'),
+  isBusiness: yup.boolean(),
+  companyName: yup.string().when('isBusiness', {
+    is: true,
+    then: (s) => s.required(),
+    otherwise: (s) => s.strip(),
+  }),
+})
+```
+
+The methods you will use most:
+
+- `schema.validate(values, { abortEarly: false })` returns a promise of the
+  cast output, or rejects with a `ValidationError`. Without `abortEarly: false`
+  it stops at the first failure; with it, `err.inner` holds every failure, each
+  with a `path` (field name) and `message`.
+- `schema.validateAt('email', values)` checks a single field, but against the
+  whole object, so cross-field rules like `ref('password')` still work. This is
+  what powers per-field validation on blur.
+- `schema.isValid(values)` resolves to a boolean when you only need yes/no.
+- `schema.cast(values)` runs transforms without validating.
+- `.test(name, message, fn)` adds a custom rule; `fn` may return a promise,
+  which is how the async username check works.
+- `yup.InferType<typeof schema>` derives the TypeScript type of the valid
+  output, so the type and the rules can never disagree.
+
+### Using it with a form library
+
+In real apps you rarely wire `validateAt` yourself; a form library handles
+touched state, submission and re-validation, and Yup plugs in as the rules.
+
+**React Hook Form** (uncontrolled inputs, very few re-renders):
+
+```jsx
+import { useForm } from 'react-hook-form'
+import { yupResolver } from '@hookform/resolvers/yup'
+
+function Signup() {
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
+    resolver: yupResolver(schema),
+    mode: 'onTouched', // validate on blur, then on change
+  })
+  const onSubmit = (data) => api.signup(data) // data is the schema's cast output
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <input {...register('email')} aria-invalid={!!errors.email} />
+      {errors.email && <p role="alert">{errors.email.message}</p>}
+      <button disabled={isSubmitting}>Sign up</button>
+    </form>
+  )
+}
+```
+
+**Formik** (controlled inputs, Yup support built in):
+
+```jsx
+<Formik initialValues={initial} validationSchema={schema} onSubmit={save}>
+  <Form>
+    <Field name="email" />
+    <ErrorMessage name="email" component="p" />
+  </Form>
+</Formik>
+```
+
+### Trade-offs
+
+- **Yup vs. Zod.** Both do the same job. Zod is TypeScript-first and infers
+  types more precisely; Yup has a long history with Formik and slightly
+  friendlier coercion of form strings. Pick the one the codebase already uses.
+- **Schema vs. hand-rolled.** A schema costs a dependency (Yup is roughly 12kB
+  gzipped) and a small API to learn. It pays off once rules multiply, depend on
+  each other, or need to run on the server too.
+- **Async rules need care.** A schema `.test()` that hits the network still has
+  the out-of-order problem from the Debounced Search challenge; this demo
+  guards it with a per-field request counter, and only calls the server once
+  the cheap synchronous rules pass.
+
+### What interviewers probe for
+
+- Can you explain the difference between validating and parsing, and show
+  that you submit the cast output?
+- How do you handle cross-field and conditional rules without duplicating logic?
+- Do you collect all errors (`abortEarly: false`) and map them to fields?
+- Do errors still reach screen readers (`aria-invalid`, `aria-describedby`,
+  `role="alert"`)?
+- Do you know client-side validation is not security, and that the server
+  must validate too?
